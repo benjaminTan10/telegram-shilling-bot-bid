@@ -8,6 +8,7 @@ use {
         engine::monitor::wallet_monitor::monitor_wallet,
     },
     anyhow::Result,
+    solana_sdk::signature::Signer,
     std::sync::Arc,
 };
 

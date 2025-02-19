@@ -1,8 +1,12 @@
 use {
     crate::common::{logger::Logger, utils::AppState},
     anyhow::Result,
-    solana_client::rpc_config::{RpcTransactionConfig, RpcProgramAccountsConfig},
-    solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey},
+    solana_client::rpc_config::RpcTransactionConfig,
+    solana_sdk::{
+        commitment_config::CommitmentConfig,
+        pubkey::Pubkey,
+        signature::{Signature, Signer},
+    },
     std::{str::FromStr, time::Duration},
     tokio::time,
 };
@@ -78,17 +82,20 @@ async fn monitor_transactions(state: &AppState, target_wallet: &Pubkey) -> Resul
     let mut tx_count = 0;
 
     for sig in signatures.iter().take(5) {
-        if let Ok(tx) = state.rpc_client.get_transaction(
-            &sig.signature,
-            config.commitment.unwrap(),
-        ) {
-            tx_count += 1;
-            logger.transaction(format!(
-                "Transaction: {} | Slot: {} | Status: {}",
-                sig.signature,
-                tx.slot,
-                if sig.err.is_none() { "Success" } else { "Failed" }
-            ));
+        // Convert string signature to Signature type
+        if let Ok(signature) = Signature::from_str(&sig.signature) {
+            if let Ok(tx) = state.rpc_client.get_transaction_with_config(
+                &signature,
+                config.clone(),
+            ) {
+                tx_count += 1;
+                logger.transaction(format!(
+                    "Transaction: {} | Slot: {} | Status: {}",
+                    sig.signature,
+                    tx.slot,
+                    if sig.err.is_none() { "Success" } else { "Failed" }
+                ));
+            }
         }
     }
 
