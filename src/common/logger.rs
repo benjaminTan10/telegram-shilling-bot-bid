@@ -1,6 +1,5 @@
 use chrono::Local;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 static TRANSACTION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
