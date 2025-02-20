@@ -12,7 +12,7 @@ use {
         UiTransactionEncoding,
         EncodedTransactionWithStatusMeta,
         UiInstruction,
-        UiTransactionStatusMeta,
+        UiMessage,
     },
     std::{str::FromStr, time::{Duration, Instant}},
     tokio::time,
@@ -136,24 +136,28 @@ async fn process_transaction(
 ) -> Result<()> {
     let logger = Logger::new("[PROCESS TX]".to_string());
     
-    // Extract transaction data based on encoding
     match transaction.transaction {
         EncodedTransaction::Json(tx_data) => {
             let message = tx_data.message;
             let pump_program_id = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
             
             // Get the accounts from the message
-            let accounts = message.account_keys
-                .iter()
-                .map(|key| key.pubkey.clone())
-                .collect::<Vec<String>>();
+            let accounts = if let Some(keys) = message.static_account_keys {
+                keys
+            } else {
+                Vec::new()
+            };
 
             // Check if PumpFun program is involved
             if accounts.iter().any(|acc| acc == pump_program_id) {
                 logger.success("Found PumpFun transaction!".to_string());
                 
                 if let Some(meta) = transaction.meta {
-                    let instructions = meta.inner_instructions.unwrap_or_default();
+                    let instructions = match meta.inner_instructions {
+                        Some(ixs) => ixs,
+                        None => Vec::new(),
+                    };
+                    
                     logger.info(format!(
                         "Instructions count: {}", 
                         instructions.len()
@@ -172,12 +176,16 @@ async fn process_transaction(
                                     ));
                                 }
                                 UiInstruction::Compiled(compiled_ix) => {
-                                    logger.info(format!(
-                                        "Instruction {}.{}: Program: {}, Data: {:?}", 
-                                        idx, inner_idx,
-                                        accounts[compiled_ix.program_id_index as usize],
-                                        compiled_ix.data
-                                    ));
+                                    if let Some(program_idx) = compiled_ix.program_id_index.checked_sub(1) {
+                                        if program_idx < accounts.len() {
+                                            logger.info(format!(
+                                                "Instruction {}.{}: Program: {}, Data: {:?}", 
+                                                idx, inner_idx,
+                                                accounts[program_idx],
+                                                compiled_ix.data
+                                            ));
+                                        }
+                                    }
                                 }
                             }
                         }
