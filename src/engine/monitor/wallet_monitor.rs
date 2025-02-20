@@ -11,6 +11,7 @@ use {
         EncodedTransaction, 
         UiTransactionEncoding,
         EncodedTransactionWithStatusMeta,
+        UiMessage,
     },
     std::{str::FromStr, time::Duration},
     tokio::time,
@@ -118,13 +119,26 @@ async fn process_transaction(
     // Extract transaction data based on encoding
     match transaction.transaction {
         EncodedTransaction::Json(tx_data) => {
-            if let Some(message) = tx_data.message {
-                // Check if it's a PumpFun transaction
-                if message.account_keys.iter().any(|key| 
-                    key.pubkey == "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
-                ) {
-                    logger.success("Found PumpFun transaction!".to_string());
-                    // TODO: Extract and copy transaction parameters
+            let message: UiMessage = tx_data.message;
+            // Check if it's a PumpFun transaction
+            if message.account_keys.iter().any(|key| 
+                key.pubkey == "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
+            ) {
+                logger.success("Found PumpFun transaction!".to_string());
+                
+                // Log transaction details
+                logger.info(format!(
+                    "Instructions count: {}", 
+                    message.instructions.len()
+                ));
+
+                // Process each instruction
+                for (idx, instruction) in message.instructions.iter().enumerate() {
+                    logger.info(format!(
+                        "Instruction {}: Program ID: {}", 
+                        idx,
+                        message.account_keys[instruction.program_id_index as usize].pubkey
+                    ));
                 }
             }
         }
