@@ -12,11 +12,12 @@ use {
         UiTransactionEncoding,
         EncodedTransactionWithStatusMeta,
         UiInstruction,
-        UiMessage,
+        UiTransactionStatusMeta,
     },
     std::{str::FromStr, time::{Duration, Instant}},
     tokio::time,
     chrono::Utc,
+    serde_json::Value,
 };
 
 const RETRY_DELAY: u64 = 5; // seconds
@@ -142,46 +143,41 @@ async fn process_transaction(
             let pump_program_id = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
             
             // Get the accounts from the message
-            let accounts = if let Some(keys) = message.static_account_keys {
-                keys
-            } else {
-                Vec::new()
-            };
+            let accounts = message.account_keys
+                .iter()
+                .map(|key| key.pubkey.to_string())
+                .collect::<Vec<String>>();
 
             // Check if PumpFun program is involved
             if accounts.iter().any(|acc| acc == pump_program_id) {
                 logger.success("Found PumpFun transaction!".to_string());
                 
                 if let Some(meta) = transaction.meta {
-                    let instructions = match meta.inner_instructions {
-                        Some(ixs) => ixs,
-                        None => Vec::new(),
-                    };
-                    
-                    logger.info(format!(
-                        "Instructions count: {}", 
-                        instructions.len()
-                    ));
+                    if let Some(inner_instructions) = meta.inner_instructions {
+                        logger.info(format!(
+                            "Instructions count: {}", 
+                            inner_instructions.len()
+                        ));
 
-                    // Process each instruction set
-                    for (idx, inner_ix_set) in instructions.iter().enumerate() {
-                        logger.info(format!("Processing instruction set {}", idx));
+                        // Process each instruction set
+                        for (idx, inner_ix_set) in inner_instructions.iter().enumerate() {
+                            logger.info(format!("Processing instruction set {}", idx));
 
-                        for (inner_idx, instruction) in inner_ix_set.instructions.iter().enumerate() {
-                            match instruction {
-                                UiInstruction::Parsed(parsed_ix) => {
-                                    logger.info(format!(
-                                        "Instruction {}.{}: {:?}", 
-                                        idx, inner_idx, parsed_ix
-                                    ));
-                                }
-                                UiInstruction::Compiled(compiled_ix) => {
-                                    if let Some(program_idx) = compiled_ix.program_id_index.checked_sub(1) {
-                                        if program_idx < accounts.len() {
+                            for (inner_idx, instruction) in inner_ix_set.instructions.iter().enumerate() {
+                                match instruction {
+                                    UiInstruction::Parsed(parsed_ix) => {
+                                        logger.info(format!(
+                                            "Instruction {}.{}: {:?}", 
+                                            idx, inner_idx, parsed_ix
+                                        ));
+                                    }
+                                    UiInstruction::Compiled(compiled_ix) => {
+                                        let program_idx = compiled_ix.program_id_index as usize;
+                                        if program_idx > 0 && program_idx - 1 < accounts.len() {
                                             logger.info(format!(
                                                 "Instruction {}.{}: Program: {}, Data: {:?}", 
                                                 idx, inner_idx,
-                                                accounts[program_idx],
+                                                accounts[program_idx - 1],
                                                 compiled_ix.data
                                             ));
                                         }
