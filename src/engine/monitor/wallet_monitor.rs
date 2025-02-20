@@ -6,7 +6,11 @@ use {
         commitment_config::CommitmentConfig,
         pubkey::Pubkey,
         signature::{Signature, Signer},
-        transaction::VersionedTransaction,
+    },
+    solana_transaction_status::{
+        EncodedTransaction, 
+        UiTransactionEncoding,
+        EncodedTransactionWithStatusMeta,
     },
     std::{str::FromStr, time::Duration},
     tokio::time,
@@ -47,12 +51,10 @@ pub async fn monitor_wallet(
             }
             Err(e) => {
                 logger.error(format!("Error monitoring transactions: {}", e));
-                // Wait before retrying
                 time::sleep(Duration::from_secs(5)).await;
             }
         }
 
-        // Monitor account balance changes
         match state.rpc_client.get_balance(&target_wallet) {
             Ok(balance) => {
                 logger.debug(format!(
@@ -71,7 +73,7 @@ async fn monitor_transactions(state: &AppState, target_wallet: &Pubkey) -> Resul
     let logger = Logger::new("[TX MONITOR]".to_string());
     
     let config = RpcTransactionConfig {
-        encoding: None,
+        encoding: Some(UiTransactionEncoding::Json),
         commitment: Some(CommitmentConfig::confirmed()),
         max_supported_transaction_version: Some(0),
     };
@@ -82,7 +84,6 @@ async fn monitor_transactions(state: &AppState, target_wallet: &Pubkey) -> Resul
     let mut tx_count = 0;
 
     for sig in signatures.iter().take(5) {
-        // Only process if no error (successful transaction)
         if sig.err.is_none() {
             if let Ok(signature) = Signature::from_str(&sig.signature) {
                 if let Ok(tx_response) = state.rpc_client.get_transaction_with_config(
@@ -96,12 +97,9 @@ async fn monitor_transactions(state: &AppState, target_wallet: &Pubkey) -> Resul
                         tx_response.slot,
                     ));
 
-                    // Get the transaction data for copying
-                    if let Some(transaction) = tx_response.transaction {
-                        match copy_transaction(&state, transaction).await {
-                            Ok(_) => logger.success("Successfully copied transaction".to_string()),
-                            Err(e) => logger.error(format!("Failed to copy transaction: {}", e)),
-                        }
+                    match process_transaction(&state, tx_response.transaction).await {
+                        Ok(_) => logger.success("Successfully processed transaction".to_string()),
+                        Err(e) => logger.error(format!("Failed to process transaction: {}", e)),
                     }
                 }
             }
@@ -111,15 +109,29 @@ async fn monitor_transactions(state: &AppState, target_wallet: &Pubkey) -> Resul
     Ok(tx_count)
 }
 
-async fn copy_transaction(state: &AppState, transaction: VersionedTransaction) -> Result<()> {
-    let logger = Logger::new("[COPY TX]".to_string());
+async fn process_transaction(
+    state: &AppState, 
+    transaction: EncodedTransactionWithStatusMeta
+) -> Result<()> {
+    let logger = Logger::new("[PROCESS TX]".to_string());
     
-    // TODO: Implement transaction copying logic here
-    // 1. Parse the transaction to identify PumpFun operations
-    // 2. Extract relevant parameters (token, amount, etc.)
-    // 3. Execute similar transaction through PumpFun
-    
-    logger.info("Preparing to copy transaction...".to_string());
+    // Extract transaction data based on encoding
+    match transaction.transaction {
+        EncodedTransaction::Json(tx_data) => {
+            if let Some(message) = tx_data.message {
+                // Check if it's a PumpFun transaction
+                if message.account_keys.iter().any(|key| 
+                    key.pubkey == "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
+                ) {
+                    logger.success("Found PumpFun transaction!".to_string());
+                    // TODO: Extract and copy transaction parameters
+                }
+            }
+        }
+        _ => {
+            logger.warning("Unsupported transaction encoding".to_string());
+        }
+    }
     
     Ok(())
 } 
