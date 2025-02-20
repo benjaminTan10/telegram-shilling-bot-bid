@@ -19,6 +19,8 @@ use {
     std::{str::FromStr, time::{Duration, Instant}},
     tokio::time,
     chrono::Utc,
+    base64,
+    bs58,
 };
 
 const RETRY_DELAY: u64 = 5; // seconds
@@ -241,7 +243,7 @@ async fn copy_transaction(state: &AppState, transaction: &EncodedTransactionWith
                         match execute_swap(&pump, &mint, is_buy, &pump_info).await {
                             Ok(signature) => {
                                 logger.success(format!(
-                                    "\n   * [SUCCESSFUL-{}] => TX_HASH: (\"{}\") \n   * [POOL] => ({}) \n   * [BOUGHT] => {} :: ({:?}).",
+                                    "\n   * [SUCCESSFUL-{}] => TX_HASH: (\"{}\") \n   * [POOL] => ({}) \n   * [COPIED] => {} :: ({:?}).",
                                     if is_buy { "BUY" } else { "SELL" },
                                     signature,
                                     mint,
@@ -256,7 +258,7 @@ async fn copy_transaction(state: &AppState, transaction: &EncodedTransactionWith
                     }
                     Err(e) => {
                         logger.error(format!(
-                            "Skip {} by Failed to get bonding curve account data after 3 retries: {}", 
+                            "Skip {} by Failed to get bonding curve account data: {}", 
                             mint, e
                         ));
                     }
@@ -288,17 +290,54 @@ fn parse_trade_info(program_data: &str) -> Result<TradeInfo> {
 }
 
 fn extract_transaction_info(logs: &[String]) -> Result<(String, bool)> {
-    // TODO: Extract mint address and whether it's a buy/sell transaction
+    let mut mint_address = String::new();
+    let mut is_buy = false;
+    
     for log in logs {
+        // Extract mint address from program data
+        if log.starts_with("Program data: ") {
+            let data = log.trim_start_matches("Program data: ");
+            if let Ok(decoded) = base64::decode(data) {
+                // First 32 bytes contain the mint address
+                if decoded.len() >= 32 {
+                    let mint_bytes = &decoded[0..32];
+                    mint_address = bs58::encode(mint_bytes).into_string();
+                }
+            }
+        }
+        
+        // Determine if buy or sell
         if log.contains("Instruction: Buy") {
-            // Extract mint and return
-            return Ok(("mint_address".to_string(), true));
+            is_buy = true;
         } else if log.contains("Instruction: Sell") {
-            // Extract mint and return
-            return Ok(("mint_address".to_string(), false));
+            is_buy = false;
         }
     }
-    Err(anyhow!("Could not determine transaction type"))
+
+    if mint_address.is_empty() {
+        return Err(anyhow!("Could not extract mint address from logs"));
+    }
+
+    Ok((mint_address, is_buy))
+}
+
+async fn execute_swap(pump: &Pump, mint: &str, is_buy: bool, pump_info: &PumpInfo) -> Result<String> {
+    let amount = if is_buy {
+        // Calculate buy amount based on virtual reserves
+        pump_info.virtual_sol_reserves / 100 // Example: 1% of virtual reserves
+    } else {
+        // Calculate sell amount based on token balance
+        let token_balance = pump.get_token_balance(mint).await?;
+        token_balance / 2 // Example: Sell 50% of balance
+    };
+
+    let signature = if is_buy {
+        pump.buy(mint, amount).await?
+    } else {
+        pump.sell(mint, amount).await?
+    };
+
+    Ok(signature)
 }
 
 #[derive(Debug)]
@@ -306,9 +345,4 @@ struct TradeInfo {
     mint: String,
     amount: u64,
     is_buy: bool,
-}
-
-async fn execute_swap(pump: &Pump, mint: &str, is_buy: bool, pump_info: &PumpInfo) -> Result<String> {
-    // TODO: Implement actual swap execution
-    Ok("dummy_signature".to_string())
 } 
