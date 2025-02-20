@@ -11,12 +11,18 @@ use {
         EncodedTransaction, 
         UiTransactionEncoding,
         EncodedTransactionWithStatusMeta,
-        UiMessage,
+        UiInstruction,
         UiTransactionStatusMeta,
     },
-    std::{str::FromStr, time::Duration},
+    std::{str::FromStr, time::{Duration, Instant}},
     tokio::time,
+    chrono::Utc,
 };
+
+const RETRY_DELAY: u64 = 5; // seconds
+const MONITOR_INTERVAL: u64 = 2; // seconds
+const MAX_RETRIES: u32 = 3;
+const TARGET_WALLET: &str = "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc";
 
 pub async fn monitor_wallet(
     ws_url: &str,
@@ -24,23 +30,31 @@ pub async fn monitor_wallet(
     slippage: u64,
     use_jito: bool,
 ) -> Result<()> {
-    let logger = Logger::new("[WALLET MONITOR]".to_string());
-    logger.info("Initializing wallet monitor...".to_string());
-
-    // Target wallet to monitor
-    let target_wallet = Pubkey::from_str("o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc")?;
-    logger.info(format!("Target wallet set to: {}", target_wallet));
-
-    // Configuration info
-    logger.info(format!("Slippage: {}%", slippage));
-    logger.info(format!("Jito MEV protection: {}", use_jito));
-    logger.info(format!("RPC URL: {}", ws_url));
-    logger.info(format!("Monitoring wallet: {}", state.wallet.pubkey()));
-
-    // Start monitoring loop
-    logger.success("Monitoring started successfully".to_string());
+    let logger = Logger::new("[PUMPFUN-MONITOR]".to_string());
+    let target_wallet = Pubkey::from_str(TARGET_WALLET)?;
     
-    let mut interval = time::interval(Duration::from_secs(2));
+    // Initialize monitoring
+    logger.info(format!("[INIT] =>  [SNIPER ENVIRONMENT]: 
+         [Web Socket RPC]: {},
+            
+         * [Wallet]: {}, * [Balance]: {} Sol, 
+            
+         * [Slippage]: {}, * [Use Jito]: {},
+            
+         * [Time Exceed]: {}, * [Retries]: {},
+            ",
+        ws_url,
+        state.wallet.pubkey(),
+        state.rpc_client.get_balance(&state.wallet.pubkey())? as f64 / 1_000_000_000.0,
+        slippage,
+        use_jito,
+        RETRY_DELAY,
+        MAX_RETRIES,
+    ));
+
+    logger.info("[STARTED. MONITORING]...".to_string());
+    
+    let mut interval = time::interval(Duration::from_secs(MONITOR_INTERVAL));
 
     loop {
         interval.tick().await;
@@ -53,19 +67,7 @@ pub async fn monitor_wallet(
             }
             Err(e) => {
                 logger.error(format!("Error monitoring transactions: {}", e));
-                time::sleep(Duration::from_secs(5)).await;
-            }
-        }
-
-        match state.rpc_client.get_balance(&target_wallet) {
-            Ok(balance) => {
-                logger.debug(format!(
-                    "Target wallet balance: {} SOL",
-                    balance as f64 / 1_000_000_000.0
-                ));
-            }
-            Err(e) => {
-                logger.error(format!("Failed to get wallet balance: {}", e));
+                time::sleep(Duration::from_secs(RETRY_DELAY)).await;
             }
         }
     }
@@ -73,6 +75,7 @@ pub async fn monitor_wallet(
 
 async fn monitor_transactions(state: &AppState, target_wallet: &Pubkey) -> Result<u64> {
     let logger = Logger::new("[TX MONITOR]".to_string());
+    let start_time = Instant::now();
     
     let config = RpcTransactionConfig {
         encoding: Some(UiTransactionEncoding::Json),
@@ -80,29 +83,45 @@ async fn monitor_transactions(state: &AppState, target_wallet: &Pubkey) -> Resul
         max_supported_transaction_version: Some(0),
     };
 
-    let signatures = state.rpc_client
-        .get_signatures_for_address(target_wallet)?;
-
+    let signatures = state.rpc_client.get_signatures_for_address(target_wallet)?;
     let mut tx_count = 0;
 
     for sig in signatures.iter().take(5) {
         if sig.err.is_none() {
-            if let Ok(signature) = Signature::from_str(&sig.signature) {
-                if let Ok(tx_response) = state.rpc_client.get_transaction_with_config(
-                    &signature,
-                    config.clone(),
-                ) {
-                    tx_count += 1;
-                    logger.success(format!(
-                        "Found successful transaction: {} | Slot: {}",
-                        sig.signature,
-                        tx_response.slot,
-                    ));
+            let signature = Signature::from_str(&sig.signature)?;
+            
+            // Log new transaction detection
+            logger.info(format!(
+                "\n   * [NEW POOL|BUY] => (\"{}\") - SLOT:({}) \n   * [DETECT] => ({}) \n   * [BUYING] => {} :: ({:?}).",
+                sig.signature,
+                sig.slot,
+                target_wallet.to_string(),
+                Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                start_time.elapsed()
+            ));
 
+            match state.rpc_client.get_transaction_with_config(&signature, config.clone()) {
+                Ok(tx_response) => {
+                    tx_count += 1;
+                    
+                    // Process successful transaction
                     match process_transaction(&state, tx_response.transaction).await {
-                        Ok(_) => logger.success("Successfully processed transaction".to_string()),
-                        Err(e) => logger.error(format!("Failed to process transaction: {}", e)),
+                        Ok(_) => {
+                            logger.success(format!(
+                                "\n   * [SUCCESSFUL-BUY] => TX_HASH: (\"{}\") \n   * [SLOT] => ({}) \n   * [TIME] => {} :: ({:?}).",
+                                sig.signature,
+                                tx_response.slot,
+                                Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                                start_time.elapsed()
+                            ));
+                        }
+                        Err(e) => {
+                            logger.error(format!("Skip {} by {}", target_wallet, e));
+                        }
                     }
+                }
+                Err(e) => {
+                    logger.error(format!("Failed to get transaction {}: {}", sig.signature, e));
                 }
             }
         }
@@ -121,32 +140,44 @@ async fn process_transaction(
     match transaction.transaction {
         EncodedTransaction::Json(tx_data) => {
             let message = tx_data.message;
-            
-            // Check if it's a PumpFun transaction by checking program ID
             let pump_program_id = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
             
-            if let Some(accounts) = message.static_accounts {
-                if accounts.iter().any(|acc| acc == pump_program_id) {
-                    logger.success("Found PumpFun transaction!".to_string());
-                    
-                    // Log transaction details
-                    if let Some(instructions) = message.instructions {
-                        logger.info(format!(
-                            "Instructions count: {}", 
-                            instructions.len()
-                        ));
+            // Get the accounts from the message
+            let accounts = message.account_keys
+                .iter()
+                .map(|key| key.pubkey.clone())
+                .collect::<Vec<String>>();
 
-                        // Process each instruction
-                        for (idx, instruction) in instructions.iter().enumerate() {
-                            if let Some(program_idx) = instruction.program_id_index {
-                                if let Some(accounts) = &message.static_accounts {
-                                    if program_idx < accounts.len() {
-                                        logger.info(format!(
-                                            "Instruction {}: Program ID: {}", 
-                                            idx,
-                                            accounts[program_idx]
-                                        ));
-                                    }
+            // Check if PumpFun program is involved
+            if accounts.iter().any(|acc| acc == pump_program_id) {
+                logger.success("Found PumpFun transaction!".to_string());
+                
+                if let Some(meta) = transaction.meta {
+                    let instructions = meta.inner_instructions.unwrap_or_default();
+                    logger.info(format!(
+                        "Instructions count: {}", 
+                        instructions.len()
+                    ));
+
+                    // Process each instruction set
+                    for (idx, inner_ix_set) in instructions.iter().enumerate() {
+                        logger.info(format!("Processing instruction set {}", idx));
+
+                        for (inner_idx, instruction) in inner_ix_set.instructions.iter().enumerate() {
+                            match instruction {
+                                UiInstruction::Parsed(parsed_ix) => {
+                                    logger.info(format!(
+                                        "Instruction {}.{}: {:?}", 
+                                        idx, inner_idx, parsed_ix
+                                    ));
+                                }
+                                UiInstruction::Compiled(compiled_ix) => {
+                                    logger.info(format!(
+                                        "Instruction {}.{}: Program: {}, Data: {:?}", 
+                                        idx, inner_idx,
+                                        accounts[compiled_ix.program_id_index as usize],
+                                        compiled_ix.data
+                                    ));
                                 }
                             }
                         }
