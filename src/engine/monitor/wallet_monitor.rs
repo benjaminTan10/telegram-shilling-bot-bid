@@ -1,10 +1,9 @@
 use {
     crate::{
         common::{logger::Logger, utils::AppState},
-        dex::pump_fun::{Pump, PumpInfo},
+        dex::pump_fun::{Pump, PumpInfo, get_pump_info},
     },
     anyhow::{anyhow, Result},
-    base64::{engine::general_purpose::STANDARD as BASE64, Engine},
     solana_client::rpc_config::RpcTransactionConfig,
     solana_sdk::{
         commitment_config::CommitmentConfig,
