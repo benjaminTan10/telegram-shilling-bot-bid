@@ -12,6 +12,7 @@ use {
         UiTransactionEncoding,
         EncodedTransactionWithStatusMeta,
         UiMessage,
+        UiTransactionStatusMeta,
     },
     std::{str::FromStr, time::Duration},
     tokio::time,
@@ -119,26 +120,37 @@ async fn process_transaction(
     // Extract transaction data based on encoding
     match transaction.transaction {
         EncodedTransaction::Json(tx_data) => {
-            let message: UiMessage = tx_data.message;
-            // Check if it's a PumpFun transaction
-            if message.account_keys.iter().any(|key| 
-                key.pubkey == "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
-            ) {
-                logger.success("Found PumpFun transaction!".to_string());
-                
-                // Log transaction details
-                logger.info(format!(
-                    "Instructions count: {}", 
-                    message.instructions.len()
-                ));
+            let message = tx_data.message;
+            
+            // Check if it's a PumpFun transaction by checking program ID
+            let pump_program_id = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+            
+            if let Some(accounts) = message.static_accounts {
+                if accounts.iter().any(|acc| acc == pump_program_id) {
+                    logger.success("Found PumpFun transaction!".to_string());
+                    
+                    // Log transaction details
+                    if let Some(instructions) = message.instructions {
+                        logger.info(format!(
+                            "Instructions count: {}", 
+                            instructions.len()
+                        ));
 
-                // Process each instruction
-                for (idx, instruction) in message.instructions.iter().enumerate() {
-                    logger.info(format!(
-                        "Instruction {}: Program ID: {}", 
-                        idx,
-                        message.account_keys[instruction.program_id_index as usize].pubkey
-                    ));
+                        // Process each instruction
+                        for (idx, instruction) in instructions.iter().enumerate() {
+                            if let Some(program_idx) = instruction.program_id_index {
+                                if let Some(accounts) = &message.static_accounts {
+                                    if program_idx < accounts.len() {
+                                        logger.info(format!(
+                                            "Instruction {}: Program ID: {}", 
+                                            idx,
+                                            accounts[program_idx]
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
