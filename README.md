@@ -18,7 +18,6 @@ Introducing the **Solana PumpFun Copy Trading Bot** written in **Rust** 🦀, de
 
 
 
-
 ### 📊 Monitoring Capabilities
 - **Wallet Tracking**: Monitor specific wallets for trading signals
 - **Multiple RPC Support**: Compatible with various Solana RPC providers
