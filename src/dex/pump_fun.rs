@@ -148,8 +148,8 @@ impl Pump {
         let logger = Logger::new("[SWAP IN PUMP.FUN] => ".to_string());
         logger.log(format!("Swapping token: {}", mint));
         
-        let _mint_pubkey = Pubkey::from_str(mint)?;
-        let _owner = self.keypair.as_ref().pubkey();
+        let mint_pubkey = Pubkey::from_str(mint)?;
+        let owner = self.keypair.as_ref().pubkey();
 
         // Convert nonblocking client to blocking client for get_pump_info
         let blocking_client = Arc::new(solana_client::rpc_client::RpcClient::new(
@@ -157,43 +157,57 @@ impl Pump {
         ));
 
         // Get pump info with blocking client
-        let _pump_info = get_pump_info(blocking_client, mint).await?;
+        let pump_info = get_pump_info(blocking_client, mint).await?;
         
-        // TODO: Implement actual swap logic
-        // 1. Get bonding curve info
-        // 2. Calculate amounts based on direction
-        match config.swap_direction {
+        // Execute swap based on direction
+        let signature = match config.swap_direction {
             SwapDirection::Buy => {
                 logger.log(format!("Buying {} SOL worth of tokens", config.amount));
+                self.buy(mint, config.amount).await?
             }
             SwapDirection::Sell => {
                 logger.log(format!("Selling {} tokens", config.amount));
+                self.sell(mint, config.amount).await?
             }
-        }
+        };
 
-        // Placeholder return
-        Ok(vec!["dummy_signature".to_string()])
+        Ok(vec![signature])
     }
 }
 
 pub async fn get_pump_info(
-    _rpc_client: Arc<solana_client::rpc_client::RpcClient>,
+    rpc_client: Arc<solana_client::rpc_client::RpcClient>,
     mint: &str,
 ) -> Result<PumpInfo> {
-    let mint = Pubkey::from_str(mint)?;
-    let _program_id = Pubkey::from_str(PUMP_PROGRAM)?;
+    let mint_pubkey = Pubkey::from_str(mint)?;
+    let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
     
-    // TODO: Implement actual PumpFun info fetching
+    // Get bonding curve PDA
+    let seeds = &[b"bonding-curve".as_ref(), mint_pubkey.as_ref()];
+    let (bonding_curve, _) = Pubkey::find_program_address(seeds, &program_id);
+
+    // Get bonding curve account data
+    let account = rpc_client.get_account(&bonding_curve)
+        .map_err(|_| anyhow!("Bonding curve account not found"))?;
+
+    // Deserialize account data
+    let bonding_curve_data = BondingCurveAccount::try_from_slice(&account.data)
+        .map_err(|_| anyhow!("Failed to deserialize bonding curve data"))?;
+
+    // Get associated bonding curve
+    let associated_seeds = &[b"associated-bonding-curve".as_ref(), mint_pubkey.as_ref()];
+    let (associated_bonding_curve, _) = Pubkey::find_program_address(associated_seeds, &program_id);
+
     Ok(PumpInfo {
-        mint: mint.to_string(),
-        bonding_curve: "".to_string(),
-        associated_bonding_curve: "".to_string(),
-        raydium_pool: None,
-        raydium_info: None,
-        complete: false,
-        virtual_sol_reserves: 0,
-        virtual_token_reserves: 0,
-        total_supply: 0,
+        mint: mint_pubkey.to_string(),
+        bonding_curve: bonding_curve.to_string(),
+        associated_bonding_curve: associated_bonding_curve.to_string(),
+        raydium_pool: None, // TODO: Implement if needed
+        raydium_info: None, // TODO: Implement if needed
+        complete: bonding_curve_data.complete,
+        virtual_sol_reserves: bonding_curve_data.virtual_sol_reserves,
+        virtual_token_reserves: bonding_curve_data.virtual_token_reserves,
+        total_supply: bonding_curve_data.token_total_supply,
     })
 }
 
@@ -225,4 +239,16 @@ fn get_bonding_curve(mint: &Pubkey) -> Result<Pubkey> {
     let seeds = &[b"bonding-curve".as_ref(), mint.as_ref()];
     let (bonding_curve, _) = Pubkey::find_program_address(seeds, &Pubkey::from_str(PUMP_PROGRAM)?);
     Ok(bonding_curve)
+}
+
+#[derive(Debug, BorshDeserialize)]
+pub struct BondingCurveAccount {
+    pub is_initialized: bool,
+    pub bump: u8,
+    pub mint: Pubkey,
+    pub authority: Pubkey,
+    pub complete: bool,
+    pub virtual_sol_reserves: u64,
+    pub virtual_token_reserves: u64,
+    pub token_total_supply: u64,
 }
