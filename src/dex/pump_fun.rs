@@ -47,7 +47,10 @@ impl Pump {
         let wallet_pubkey = self.keypair.pubkey();
         let token_account = get_associated_token_address(&wallet_pubkey, &mint_pubkey);
 
-        // Build buy instruction
+        // Build buy instruction with proper data format
+        let mut data = vec![0u8]; // Instruction discriminator
+        data.extend_from_slice(&amount.to_le_bytes());
+
         let instruction = Instruction {
             program_id: Pubkey::from_str(PUMP_PROGRAM)?,
             accounts: vec![
@@ -56,7 +59,7 @@ impl Pump {
                 AccountMeta::new_readonly(mint_pubkey, false),
                 AccountMeta::new_readonly(system_program::ID, false),
             ],
-            data: vec![0, amount.to_le_bytes().to_vec()].concat(),
+            data,
         };
 
         // Send transaction
@@ -77,7 +80,10 @@ impl Pump {
         let wallet_pubkey = self.keypair.pubkey();
         let token_account = get_associated_token_address(&wallet_pubkey, &mint_pubkey);
 
-        // Build sell instruction
+        // Build sell instruction with proper data format
+        let mut data = vec![1u8]; // Instruction discriminator
+        data.extend_from_slice(&amount.to_le_bytes());
+
         let instruction = Instruction {
             program_id: Pubkey::from_str(PUMP_PROGRAM)?,
             accounts: vec![
@@ -86,7 +92,7 @@ impl Pump {
                 AccountMeta::new_readonly(mint_pubkey, false),
                 AccountMeta::new_readonly(system_program::ID, false),
             ],
-            data: vec![1, amount.to_le_bytes().to_vec()].concat(),
+            data,
         };
 
         // Send transaction
@@ -109,10 +115,16 @@ impl Pump {
         let _mint_pubkey = Pubkey::from_str(mint)?;
         let _owner = self.keypair.as_ref().pubkey();
 
+        // Convert nonblocking client to blocking client for get_pump_info
+        let blocking_client = Arc::new(solana_client::rpc_client::RpcClient::new(
+            self.client.url().to_string()
+        ));
+
+        // Get pump info with blocking client
+        let _pump_info = get_pump_info(blocking_client, mint).await?;
+        
         // TODO: Implement actual swap logic
         // 1. Get bonding curve info
-        let _pump_info = get_pump_info(self.client.clone(), mint).await?;
-        
         // 2. Calculate amounts based on direction
         match config.swap_direction {
             SwapDirection::Buy => {
