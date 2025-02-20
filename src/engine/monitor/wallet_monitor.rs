@@ -21,6 +21,7 @@ use {
 const RETRY_DELAY: u64 = 5; // seconds
 const MONITOR_INTERVAL: u64 = 2; // seconds
 const TARGET_WALLET: &str = "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc";
+const PUMP_PROGRAM_ID: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 
 pub async fn monitor_wallet(
     ws_url: &str,
@@ -143,25 +144,27 @@ async fn monitor_transactions(
                 sig.signature,
                 sig.slot,
                 target_wallet.to_string(),
-                Utc::now().to_rfc3939_opts(chrono::SecondsFormat::Micros, true),
+                Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                 start_time.elapsed()
             ));
 
             if let Ok(tx_response) = state.rpc_client.get_transaction_with_config(&signature, config.clone()) {
                 tx_count += 1;
                 
-                // Process and copy transaction
-                if let Ok(_) = process_transaction(&state, tx_response.transaction).await {
+                // Process transaction
+                if let Ok(()) = process_transaction(&state, &tx_response.transaction).await {
                     logger.success(format!(
                         "\n   * [COPYING TX] => Hash: (\"{}\") \n   * [SLOT] => ({}) \n   * [TIME] => {} :: ({:?}).",
                         sig.signature,
                         tx_response.slot,
-                        Utc::now().to_rfc3939_opts(chrono::SecondsFormat::Micros, true),
+                        Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                         start_time.elapsed()
                     ));
 
-                    // TODO: Implement transaction copying logic here
-                    // This is where you'll add the code to replicate the transaction
+                    // Copy the transaction
+                    if let Err(e) = copy_transaction(&state, &tx_response.transaction).await {
+                        logger.error(format!("Failed to copy transaction: {}", e));
+                    }
                 }
             }
         }
@@ -170,4 +173,32 @@ async fn monitor_transactions(
     Ok((tx_count, latest_signature))
 }
 
-// ... rest of the code remains the same ... 
+async fn process_transaction(state: &AppState, transaction: &EncodedTransactionWithStatusMeta) -> Result<()> {
+    let logger = Logger::new("[PROCESS TX]".to_string());
+    
+    if let EncodedTransaction::Json(tx_data) = &transaction.transaction {
+        if let Some(meta) = &transaction.meta {
+            // Check if transaction involves PumpFun program
+            if meta.log_messages.as_ref().map_or(false, |logs| {
+                logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID))
+            }) {
+                logger.success("Found PumpFun transaction!".to_string());
+                return Ok(());
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+async fn copy_transaction(state: &AppState, transaction: &EncodedTransactionWithStatusMeta) -> Result<()> {
+    let logger = Logger::new("[COPY TX]".to_string());
+    
+    // TODO: Implement transaction copying logic
+    // 1. Extract transaction instructions
+    // 2. Modify instructions for bot wallet
+    // 3. Build and send new transaction
+    
+    logger.info("Transaction copying not yet implemented".to_string());
+    Ok(())
+} 
