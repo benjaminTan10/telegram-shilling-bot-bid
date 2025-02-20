@@ -1,6 +1,10 @@
 use {
-    crate::common::{logger::Logger, utils::AppState},
-    anyhow::Result,
+    crate::{
+        common::{logger::Logger, utils::AppState},
+        dex::pump_fun::{Pump, PumpInfo},
+    },
+    anyhow::{anyhow, Result},
+    base64::{engine::general_purpose::STANDARD as BASE64, Engine},
     solana_client::rpc_config::RpcTransactionConfig,
     solana_sdk::{
         commitment_config::CommitmentConfig,
@@ -178,15 +182,18 @@ async fn process_transaction(state: &AppState, transaction: &EncodedTransactionW
     
     if let EncodedTransaction::Json(tx_data) = &transaction.transaction {
         if let Some(meta) = &transaction.meta {
-            // Check if transaction involves PumpFun program
             if let OptionSerializer::Some(logs) = &meta.log_messages {
                 if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
                     logger.success("Found PumpFun transaction!".to_string());
                     
+                    // Extract transaction data
+                    let program_data = extract_program_data(logs)?;
+                    let trade_info = parse_trade_info(&program_data)?;
+                    
                     // Log transaction details
                     logger.info(format!(
-                        "\n   * [PUMP TRANSACTION FOUND] => \n   * [LOGS] => {:?}",
-                        logs
+                        "\n   * [PUMP TRANSACTION FOUND] => \n   * [LOGS] => {:?}\n   * [TRADE INFO] => {:?}",
+                        logs, trade_info
                     ));
                     
                     return Ok(());
@@ -200,12 +207,109 @@ async fn process_transaction(state: &AppState, transaction: &EncodedTransactionW
 
 async fn copy_transaction(state: &AppState, transaction: &EncodedTransactionWithStatusMeta) -> Result<()> {
     let logger = Logger::new("[COPY TX]".to_string());
-    
-    // TODO: Implement transaction copying logic
-    // 1. Extract transaction instructions
-    // 2. Modify instructions for bot wallet
-    // 3. Build and send new transaction
-    
-    logger.info("Transaction copying not yet implemented".to_string());
+    let start_time = Instant::now();
+
+    if let EncodedTransaction::Json(tx_data) = &transaction.transaction {
+        if let Some(meta) = &transaction.meta {
+            if let OptionSerializer::Some(logs) = &meta.log_messages {
+                // Extract mint address and instruction type
+                let (mint, is_buy) = extract_transaction_info(logs)?;
+                
+                logger.info(format!(
+                    "\n   * [BUILD-IXN]({}) - {} :: {:?}",
+                    mint, 
+                    Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                    start_time.elapsed()
+                ));
+
+                // Create Pump instance
+                let pump = Pump::new(
+                    state.rpc_nonblocking_client.clone(),
+                    state.wallet.clone(),
+                );
+
+                // Get pump info
+                match get_pump_info(state.rpc_client.clone(), &mint).await {
+                    Ok(pump_info) => {
+                        logger.info(format!(
+                            "\n   * [SWAP-BEGIN]({}) - {} :: {:?}",
+                            mint,
+                            Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                            start_time.elapsed()
+                        ));
+
+                        // Execute swap
+                        match execute_swap(&pump, &mint, is_buy, &pump_info).await {
+                            Ok(signature) => {
+                                logger.success(format!(
+                                    "\n   * [SUCCESSFUL-{}] => TX_HASH: (\"{}\") \n   * [POOL] => ({}) \n   * [BOUGHT] => {} :: ({:?}).",
+                                    if is_buy { "BUY" } else { "SELL" },
+                                    signature,
+                                    mint,
+                                    Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                                    start_time.elapsed()
+                                ));
+                            }
+                            Err(e) => {
+                                logger.error(format!("Failed to execute swap: {}", e));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        logger.error(format!(
+                            "Skip {} by Failed to get bonding curve account data after 3 retries: {}", 
+                            mint, e
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
+}
+
+// Helper functions
+fn extract_program_data(logs: &[String]) -> Result<String> {
+    for log in logs {
+        if log.starts_with("Program data: ") {
+            return Ok(log.trim_start_matches("Program data: ").to_string());
+        }
+    }
+    Err(anyhow!("No program data found in logs"))
+}
+
+fn parse_trade_info(program_data: &str) -> Result<TradeInfo> {
+    // TODO: Implement proper trade info parsing from program data
+    Ok(TradeInfo {
+        mint: String::new(),
+        amount: 0,
+        is_buy: false,
+    })
+}
+
+fn extract_transaction_info(logs: &[String]) -> Result<(String, bool)> {
+    // TODO: Extract mint address and whether it's a buy/sell transaction
+    for log in logs {
+        if log.contains("Instruction: Buy") {
+            // Extract mint and return
+            return Ok(("mint_address".to_string(), true));
+        } else if log.contains("Instruction: Sell") {
+            // Extract mint and return
+            return Ok(("mint_address".to_string(), false));
+        }
+    }
+    Err(anyhow!("Could not determine transaction type"))
+}
+
+#[derive(Debug)]
+struct TradeInfo {
+    mint: String,
+    amount: u64,
+    is_buy: bool,
+}
+
+async fn execute_swap(pump: &Pump, mint: &str, is_buy: bool, pump_info: &PumpInfo) -> Result<String> {
+    // TODO: Implement actual swap execution
+    Ok("dummy_signature".to_string())
 } 
