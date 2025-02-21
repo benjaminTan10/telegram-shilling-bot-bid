@@ -78,6 +78,32 @@ impl Pump {
         Ok(token_account)
     }
 
+    pub async fn buy(&self, mint: &str, amount: u64) -> Result<String> {
+        let config = SwapConfig {
+            amount,
+            swap_direction: SwapDirection::Buy,
+            slippage: 100, // 1% slippage
+            in_type: None,
+            use_jito: false,
+        };
+
+        let signatures = self.swap(mint, config).await?;
+        Ok(signatures[0].clone())
+    }
+
+    pub async fn sell(&self, mint: &str, amount: u64) -> Result<String> {
+        let config = SwapConfig {
+            amount,
+            swap_direction: SwapDirection::Sell,
+            slippage: 100, // 1% slippage
+            in_type: None,
+            use_jito: false,
+        };
+
+        let signatures = self.swap(mint, config).await?;
+        Ok(signatures[0].clone())
+    }
+
     pub async fn swap(&self, mint: &str, config: SwapConfig) -> Result<Vec<String>> {
         let logger = Logger::new("[SWAP IN PUMP.FUN] => ".to_string());
         logger.log(format!("Swapping token: {}", mint));
