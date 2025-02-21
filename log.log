@@ -1,92 +1,29 @@
-Running `target/debug/pumpfun-copy`
-[2025-02-20 15:59:47.690] [MAIN] [INFO] Starting PumpFun sniper bot...
-[2025-02-20 15:59:47.691] [MAIN] [INFO] Bot wallet: 5rkdR9CTv5t49ksbfzhNtHhNhgTabjiQYQbThfWHZyzW
-[2025-02-20 15:59:47.691] [MAIN] [SUCCESS] Bot initialization complete
-[2025-02-20 15:59:47.691] [MAIN] [INFO] Starting wallet monitor...
-[2025-02-20 15:59:48.169] [PUMPFUN-MONITOR] [INFO]
-[INIT] =>  [SNIPER ENVIRONMENT]:
-         [Web Socket RPC]: wss://solana-api.instantnodes.io/token-vmNx6Nvozs7tSaA5hJn6ejVvH4PdPHQ7,
-
-         * [Target Wallet]: o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc,
-         * [Bot Wallet]: 5rkdR9CTv5t49ksbfzhNtHhNhgTabjiQYQbThfWHZyzW, * [Balance]: 0.006700723 Sol,
-
-         * [Slippage]: 5%, * [Use Jito]: true,
-
-         * [Monitor Interval]: 2s, * [Retry Delay]: 5s
-
-[2025-02-20 15:59:48.169] [PUMPFUN-MONITOR] [INFO] [STARTED. MONITORING]...
-[2025-02-20 15:59:48.170] [PUMPFUN-MONITOR] [INFO]
-[MONITORING CYCLE] => Time: 2025-02-20T15:59:48.170560Z
-[2025-02-20 15:59:48.646] [TX MONITOR] [INFO]
-   * [NEW TX] => ("2xffKyXTvuPKphmMua8zvDeUNHc6F9oHpdV24bzzB2QC8wDLRa8nZjrSMLoFF46cVt6wmasqyNFp4RFiwt3CxBLE") - SLOT:(321937685)
+   * [NEW TX] => ("55d6N5AJBT6sRTx6ZYpASThVP2UMCucw3WUfm2RGHwbU85JUecNPFPG3YZPJyDD2UWR8sX9s19HrfXk2NjUyi5SB") - SLOT:(322079121)
    * [FROM] => (o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc)
-   * [TIME] => 2025-02-20T15:59:48.646964Z :: (476.409951ms).
-[2025-02-20 15:59:48.752] [PROCESS TX] [SUCCESS] Found PumpFun transaction!
-[2025-02-20 15:59:48.752] [PROCESS TX] [INFO]
+   * [TIME] => 2025-02-21T07:33:56.407190Z :: (691.168908ms).
+[2025-02-21 07:33:56.505] [PROCESS TX] [SUCCESS] Found PumpFun transaction!
+[2025-02-21 07:33:56.505] [PROCESS TX] [INFO]
    * [PUMP TRANSACTION FOUND] =>
-   * [LOGS] => ["Program ComputeBudget111111111111111111111111111111 invoke [1]", "Program ComputeBudget111111111111111111111111111111 success", "Program ComputeBudget111111111111111111111111111111 invoke [1]", "Program ComputeBudget111111111111111111111111111111 success", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]", "Program log: Instruction: Sell", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]", "Program log: Instruction: Transfer", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4645 of 51762 compute units", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [2]", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 2132 of 43451 compute units", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success", "Program data: vdt/007mYe7n3l5a5afR7wXKfFyjiVOVyFOd04ixxxguQusRcgD7l/8VoSoAAAAA38SnOqIUAAAAC8/60geEHarnEMtcmE3t7lADNe2/gxa7NAhBe5Ufe5lmUbdnAAAAAAHbi1UHAAAACqxTvmqhAwABL2hZAAAAAAoUQXLZogIA", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 32586 of 71700 compute units", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success"]
-[2025-02-20 15:59:48.752] [TX MONITOR] [SUCCESS]
-   * [COPYING TX] => Hash: ("2xffKyXTvuPKphmMua8zvDeUNHc6F9oHpdV24bzzB2QC8wDLRa8nZjrSMLoFF46cVt6wmasqyNFp4RFiwt3CxBLE")
-   * [SLOT] => (321937685)
-   * [TIME] => 2025-02-20T15:59:48.752329Z :: (581.762749ms).
-[2025-02-20 15:59:48.752] [COPY TX] [INFO] Transaction copying not yet implemented
-[2025-02-20 15:59:48.752] [PUMPFUN-MONITOR] [TX:0] Found 1 new transactions from target wallet
-[2025-02-20 15:59:48.970] [PUMPFUN-MONITOR] [INFO] [BALANCES] => Target: 69.137204062 SOL, Bot: 0.006700723 SOL
-[2025-02-20 15:59:48.970] [PUMPFUN-MONITOR] [INFO] [CYCLE COMPLETE] => Duration: 799.904097ms
-
-[2025-02-20 15:59:50.171] [PUMPFUN-MONITOR] [INFO]
-[MONITORING CYCLE] => Time: 2025-02-20T15:59:50.171189Z
-[2025-02-20 15:59:50.644] [TX MONITOR] [INFO]
-   * [NEW TX] => ("vdtaogJahrGGTpq2DfNXSCqnK66UkzuYT5Qs9LAKaJRwBTmUjimBiRyXAMtD4xy6R5PkJe7ja4dXv7scpt7jtu6") - SLOT:(321937690)
-   * [FROM] => (o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc)
-   * [TIME] => 2025-02-20T15:59:50.644072Z :: (472.757613ms).
-[2025-02-20 15:59:50.753] [TX MONITOR] [SUCCESS]
-   * [COPYING TX] => Hash: ("vdtaogJahrGGTpq2DfNXSCqnK66UkzuYT5Qs9LAKaJRwBTmUjimBiRyXAMtD4xy6R5PkJe7ja4dXv7scpt7jtu6")
-   * [SLOT] => (321937690)
-   * [TIME] => 2025-02-20T15:59:50.753320Z :: (582.000593ms).
-[2025-02-20 15:59:50.753] [COPY TX] [INFO] Transaction copying not yet implemented
-[2025-02-20 15:59:50.753] [PUMPFUN-MONITOR] [TX:1] Found 1 new transactions from target wallet
-[2025-02-20 15:59:50.985] [PUMPFUN-MONITOR] [INFO] [BALANCES] => Target: 69.137204062 SOL, Bot: 0.006700723 SOL
-[2025-02-20 15:59:50.985] [PUMPFUN-MONITOR] [INFO] [CYCLE COMPLETE] => Duration: 814.312467ms
-
-[2025-02-20 15:59:52.171] [PUMPFUN-MONITOR] [INFO]
-[MONITORING CYCLE] => Time: 2025-02-20T15:59:52.171172Z
-[2025-02-20 15:59:52.815] [TX MONITOR] [INFO]
-   * [NEW TX] => ("AHNsHcAK45zrddsK3BGp8zS2iE91wRMhhdxnM4uzxaaLCFHyPUGcY23B3EpktorSaLhKAwdU8ZRJJdysjGbLhVW") - SLOT:(321937695)
-   * [FROM] => (o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc)
-   * [TIME] => 2025-02-20T15:59:52.815874Z :: (644.587298ms).
-[2025-02-20 15:59:52.919] [PROCESS TX] [SUCCESS] Found PumpFun transaction!
-[2025-02-20 15:59:52.919] [PROCESS TX] [INFO]
-   * [PUMP TRANSACTION FOUND] =>
-   * [LOGS] => ["Program ComputeBudget111111111111111111111111111111 invoke [1]", "Program ComputeBudget111111111111111111111111111111 success", "Program ComputeBudget111111111111111111111111111111 invoke [1]", "Program ComputeBudget111111111111111111111111111111 success", "Program ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL invoke [1]", "Program log: Create", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]", "Program log: Instruction: GetAccountDataSize", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 1569 of 66303 compute units", "Program return: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA pQAAAAAAAAA=", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success", "Program 11111111111111111111111111111111 invoke [2]", "Program 11111111111111111111111111111111 success", "Program log: Initialize the associated token account", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]", "Program log: Instruction: InitializeImmutableOwner", "Program log: Please upgrade to SPL Token 2022 for immutable owner support", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 1405 of 59716 compute units", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]", "Program log: Instruction: InitializeAccount3", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4188 of 55834 compute units", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success", "Program ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL consumed 20337 of 71700 compute units", "Program ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL success", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]", "Program log: Instruction: Buy", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]", "Program log: Instruction: Transfer", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4645 of 26846 compute units", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success", "Program 11111111111111111111111111111111 invoke [2]", "Program 11111111111111111111111111111111 success", "Program 11111111111111111111111111111111 invoke [2]", "Program 11111111111111111111111111111111 success", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [2]", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 2132 of 14276 compute units", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success", "Program data: vdt/007mYe6Be2qM9FYEEgvE8G7V7xtx0N6FUuB4UzKzeFKqKdqikwAWoSoAAAAANXPEMOUUAAABC8/60geEHarnEMtcmE3t7lADNe2/gxa7NAhBe5Ufe5lqUbdnAAAAAAAvQXQHAAAA2MWQ4HWSAwAAgx14AAAAANgtfpTkkwIA", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 41423 of 51363 compute units", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success", "Program 11111111111111111111111111111111 invoke [1]", "Program 11111111111111111111111111111111 success"]
-[2025-02-20 15:59:52.919] [TX MONITOR] [SUCCESS]
-   * [COPYING TX] => Hash: ("AHNsHcAK45zrddsK3BGp8zS2iE91wRMhhdxnM4uzxaaLCFHyPUGcY23B3EpktorSaLhKAwdU8ZRJJdysjGbLhVW")
-   * [SLOT] => (321937695)
-   * [TIME] => 2025-02-20T15:59:52.919173Z :: (747.876117ms).
-[2025-02-20 15:59:52.919] [COPY TX] [INFO] Transaction copying not yet implemented
-[2025-02-20 15:59:52.919] [PUMPFUN-MONITOR] [TX:2] Found 1 new transactions from target wallet
-[2025-02-20 15:59:53.118] [PUMPFUN-MONITOR] [INFO] [BALANCES] => Target: 69.19516834 SOL, Bot: 0.006700723 SOL
-[2025-02-20 15:59:53.118] [PUMPFUN-MONITOR] [INFO] [CYCLE COMPLETE] => Duration: 947.604606ms
-
-[2025-02-20 15:59:54.170] [PUMPFUN-MONITOR] [INFO]
-[MONITORING CYCLE] => Time: 2025-02-20T15:59:54.170294Z
-[2025-02-20 15:59:55.052] [PUMPFUN-MONITOR] [INFO] [BALANCES] => Target: 69.19516834 SOL, Bot: 0.006700723 SOL
-[2025-02-20 15:59:55.052] [PUMPFUN-MONITOR] [INFO] [CYCLE COMPLETE] => Duration: 882.08461ms
-
-[2025-02-20 15:59:56.171] [PUMPFUN-MONITOR] [INFO]
-[MONITORING CYCLE] => Time: 2025-02-20T15:59:56.171172Z
-[2025-02-20 15:59:56.864] [PUMPFUN-MONITOR] [INFO] [BALANCES] => Target: 69.195125965 SOL, Bot: 0.006700723 SOL
-[2025-02-20 15:59:56.864] [PUMPFUN-MONITOR] [INFO] [CYCLE COMPLETE] => Duration: 692.925685ms
-
-[2025-02-20 15:59:58.170] [PUMPFUN-MONITOR] [INFO]
-[MONITORING CYCLE] => Time: 2025-02-20T15:59:58.170892Z
-[2025-02-20 15:59:58.877] [PUMPFUN-MONITOR] [INFO] [BALANCES] => Target: 69.195125965 SOL, Bot: 0.006700723 SOL
-[2025-02-20 15:59:58.877] [PUMPFUN-MONITOR] [INFO] [CYCLE COMPLETE] => Duration: 706.396596ms
-
-[2025-02-20 16:00:00.171] [PUMPFUN-MONITOR] [INFO]
-[MONITORING CYCLE] => Time: 2025-02-20T16:00:00.171181Z
-[2025-02-20 16:00:00.795] [PUMPFUN-MONITOR] [INFO] [BALANCES] => Target: 70.097027561 SOL, Bot: 0.006700723 SOL
-[2025-02-20 16:00:00.795] [PUMPFUN-MONITOR] [INFO] [CYCLE COMPLETE] => Duration: 623.898406ms
-
-[2025-02-20 16:00:02.170] [PUMPFUN-MONITOR] [INFO]
-[MONITORING CYCLE] => Time: 2025-02-20T16:00:02.170962Z
+   * [LOGS] => ["Program ComputeBudget111111111111111111111111111111 invoke [1]", 
+   "Program ComputeBudget111111111111111111111111111111 success", 
+   "Program ComputeBudget111111111111111111111111111111 invoke [1]", "Program ComputeBudget111111111111111111111111111111 success", 
+   "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]",
+    "Program log: Instruction: Sell", 
+    "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]", 
+    "Program log: Instruction: Transfer", 
+    "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4645 of 45762 compute units", 
+    "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success", 
+    "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [2]", 
+    "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 2132 of 37451 compute units", 
+    "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success", 
+    "Program data: vdt/007mYe5gsJEfG9ZCjZWm6jcCvrcMSc9uVlKW4pacS4hKxW1lf/RH9SAAAAAAUzTk9yURAAAAC8/60geEHarnEMtcmE3t7lADNe2/gxa7NAhBe5Ufe5lNLLhnAAAAABvE8RYHAAAAJlzlj3nBAwAbGM4aAAAAACbE0kPowgIA", 
+    "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 38586 of 71700 compute units", 
+    "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success"]
+   * [TRADE INFO] => TradeInfo { mint: "", amount: 0, is_buy: false }
+[2025-02-21 07:33:56.505] [TX MONITOR] [SUCCESS]
+   * [COPYING TX] => Hash: ("55d6N5AJBT6sRTx6ZYpASThVP2UMCucw3WUfm2RGHwbU85JUecNPFPG3YZPJyDD2UWR8sX9s19HrfXk2NjUyi5SB")
+   * [SLOT] => (322079121)
+   * [TIME] => 2025-02-21T07:33:56.505874Z :: (789.852809ms).
+[2025-02-21 07:33:56.505] [COPY TX] [INFO]
+   * [BUILD-IXN](Dn8BWWfCn86e5pskC4dCHEGkEi6ahhmwnZztijsYi4CM) - 2025-02-21T07:33:56.505923Z :: 33.373µs
+[2025-02-21 07:33:56.610] [COPY TX] [ERROR] Skip Dn8BWWfCn86e5pskC4dCHEGkEi6ahhmwnZztijsYi4CM by Failed to get bonding curve account data: Failed to get bonding curve account: AccountNotFound: pubkey=3TtZzHRQgT4aKNBGyrJ8rQyrG7pNuKpcj9RCMhBaPwrQ

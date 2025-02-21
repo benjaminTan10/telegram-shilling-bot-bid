@@ -298,11 +298,24 @@ fn extract_transaction_info(logs: &[String]) -> Result<(String, bool)> {
         if log.starts_with("Program data: ") {
             let data = log.trim_start_matches("Program data: ");
             if let Ok(decoded) = base64::decode(data) {
+                println!("Decoded data length: {}", decoded.len());
+                
                 // First 32 bytes contain the mint address
                 if decoded.len() >= 32 {
                     let mint_bytes = &decoded[0..32];
                     mint_address = bs58::encode(mint_bytes).into_string();
+                    println!("Mint address: {}", mint_address);
+                    
+                    // Print remaining data bytes
+                    if decoded.len() > 32 {
+                        println!("Remaining data bytes: {:?}", &decoded[32..]);
+                        println!("Remaining data as string: {}", String::from_utf8_lossy(&decoded[32..]));
+                    }
                 }
+                
+                println!("Full decoded data: {:?}", decoded);
+            } else {
+                println!("Failed to decode base64 data: {}", data);
             }
         }
         
