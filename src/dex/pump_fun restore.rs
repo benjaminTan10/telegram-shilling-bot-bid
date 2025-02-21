@@ -16,8 +16,6 @@ use {
     spl_associated_token_account::{get_associated_token_address, instruction::create_associated_token_account},
     std::{str::FromStr, sync::Arc},
 };
-use borsh::from_slice;
-use tracing::warn;
 
 pub const PUMP_PROGRAM: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 pub const PUMP_GLOBAL: &str = "4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf";
@@ -213,41 +211,99 @@ impl Pump {
     }
 }
 
-pub fn get_pda(mint: &Pubkey, program_id: &Pubkey) -> Result<Pubkey> {
-    let seeds = [b"bonding-curve".as_ref(), mint.as_ref()];
-    let (bonding_curve, _bump) = Pubkey::find_program_address(&seeds, program_id);
-    Ok(bonding_curve)
-}
-
 pub async fn get_bonding_curve_account(
     rpc_client: Arc<solana_client::rpc_client::RpcClient>,
     mint: &Pubkey,
     program_id: &Pubkey,
 ) -> Result<(Pubkey, Pubkey, BondingCurveAccount)> {
-    let bonding_curve = get_pda(mint, program_id)?;
-    let associated_bonding_curve = get_associated_token_address(&bonding_curve, &mint);
-    let bonding_curve_data = rpc_client
-        .get_account_data(&bonding_curve)
-        .inspect_err(|err| {
-            warn!(
-                "Failed to get bonding curve account data: {}, err: {}",
-                bonding_curve, err
-            );
-        })?;
+    let logger = Logger::new("[get_bonding_curve_account TX]".to_string());
+    logger.info(format!(
+        "\n  get_bonding_curve_account called with mint: {} and program_id: {}", mint, program_id
+    ));
 
-    let bonding_curve_account =
-        from_slice::<BondingCurveAccount>(&bonding_curve_data).map_err(|e| {
-            anyhow!(
-                "Failed to deserialize bonding curve account: {}",
-                e.to_string()
-            )
-        })?;
+    // Get bonding curve PDA with correct seeds
+    let seeds = &[b"bonding-curve", mint.as_ref()];
+    let (bonding_curve, _bump) = Pubkey::find_program_address(seeds, program_id);
 
-    Ok((
-        bonding_curve,
-        associated_bonding_curve,
-        bonding_curve_account,
-    ))
+    logger.info(format!(
+        "\n  get_bonding_curve_account PDA: {} for mint: {}",
+        bonding_curve.to_string(),
+        mint.to_string()
+    ));
+
+    // Get associated token account
+    let associated_bonding_curve = get_associated_token_address(&bonding_curve, mint);
+
+    logger.info(format!(
+        "\n  get_bonding_curve_account associated_bonding_curve: {}",
+        associated_bonding_curve.to_string()
+    ));
+    // Get account data with retries and proper error handling
+    let mut retries = 3;
+    while retries > 0 {
+        match rpc_client.get_account(&bonding_curve) {
+            Ok(account) => {
+                logger.info(format!(
+                    "\n  get_bonding_curve_account account found with {} bytes", account.data.len()
+                ));
+                
+                // Skip 8 bytes of discriminator
+                let data = if account.data.len() > 8 {
+                    &account.data[8..]
+                } else {
+                    return Err(anyhow!("Account data too short"));
+                };
+
+                logger.debug(format!(
+                    "\n  First 8 bytes (discriminator): {:?}", &account.data
+                ));
+                logger.info(format!(
+                    "\n  Raw account data length: {}", account.data.len()
+                ));
+                logger.debug(format!(
+                    "\n  First 8 bytes (discriminator): {:?}", &account.data[..8]
+                ));
+                logger.debug(format!(
+                    "\n  Remaining data length: {}", data.len()
+                ));
+                logger.debug(format!(
+                    "\n  Data hex dump: {:02x?}", data
+                ));
+                logger.debug(format!(
+                    "\n  Raw account data: {:?}", account.data
+                ));
+
+                
+
+                match BondingCurveAccount::try_from_slice(data) {
+                    Ok(bonding_curve_data) => {
+                        // Validate the account data
+                        if bonding_curve_data.mint != *mint {
+                            return Err(anyhow!("Bonding curve mint mismatch"));
+                        }
+
+                        return Ok((bonding_curve, associated_bonding_curve, bonding_curve_data));
+                    }
+                    Err(e) => {
+                       logger.error(format!(
+                        "\n  get_bonding_curve_account account data deserialize error: {}", e
+                       ));
+                    }
+                }
+            }
+            Err(e) => {
+                logger.error(format!(
+                    "\n  get_bonding_curve_account account get account error: {}", e
+                ));
+            }
+        }
+        retries -= 1;
+        if retries > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
+
+    Err(anyhow!("Failed to get valid bonding curve account after retries"))
 }
 
 pub async fn get_pump_info(
