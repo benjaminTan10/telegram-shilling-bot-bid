@@ -294,35 +294,55 @@ fn extract_transaction_info(logs: &[String]) -> Result<(String, bool)> {
     let mut is_buy = false;
     
     for log in logs {
-        // Extract mint address from program data
+        // Extract and analyze program data
         if log.starts_with("Program data: ") {
             let data = log.trim_start_matches("Program data: ");
             if let Ok(decoded) = base64::decode(data) {
                 println!("Decoded data length: {}", decoded.len());
                 
-                // First 32 bytes contain the mint address
-                if decoded.len() >= 32 {
-                    let mint_bytes = &decoded[0..32];
+                // First 8 bytes are instruction discriminator
+                if decoded.len() >= 8 {
+                    let discriminator = &decoded[0..8];
+                    let discriminator_value = u64::from_le_bytes(discriminator.try_into().unwrap());
+                    println!("Instruction discriminator: {}", discriminator_value);
+
+                    // Match against known method discriminators
+                    is_buy = match discriminator_value {
+                        16927863322537952870 => true,  // PUMP_BUY_METHOD
+                        12502976635542562355 => false, // PUMP_SELL_METHOD
+                        _ => {
+                            println!("Unknown instruction discriminator");
+                            false
+                        }
+                    };
+                }
+
+                // Next 32 bytes after instruction data should be the mint address
+                if decoded.len() >= 40 {  // 8 (discriminator) + 32 (mint)
+                    let mint_bytes = &decoded[8..40];
                     mint_address = bs58::encode(mint_bytes).into_string();
-                    println!("Mint address: {}", mint_address);
-                    
-                    // Print remaining data bytes
-                    if decoded.len() > 32 {
-                        println!("Remaining data bytes: {:?}", &decoded[32..]);
-                        println!("Remaining data as string: {}", String::from_utf8_lossy(&decoded[32..]));
+                    println!("Extracted mint address: {}", mint_address);
+                }
+
+                // Analyze remaining data (amount, etc)
+                if decoded.len() > 40 {
+                    let amount_bytes = &decoded[40..48]; // Next 8 bytes for amount
+                    if amount_bytes.len() == 8 {
+                        let amount = u64::from_le_bytes(amount_bytes.try_into().unwrap());
+                        println!("Transaction amount: {}", amount);
                     }
                 }
-                
-                println!("Full decoded data: {:?}", decoded);
             } else {
                 println!("Failed to decode base64 data: {}", data);
             }
         }
         
-        // Determine if buy or sell
-        if log.contains("Instruction: Buy") {
+        // Additional log analysis for confirmation
+        if log.contains("Program log: Instruction: Buy") {
+            println!("Confirmed Buy instruction from logs");
             is_buy = true;
-        } else if log.contains("Instruction: Sell") {
+        } else if log.contains("Program log: Instruction: Sell") {
+            println!("Confirmed Sell instruction from logs");
             is_buy = false;
         }
     }
@@ -331,6 +351,12 @@ fn extract_transaction_info(logs: &[String]) -> Result<(String, bool)> {
         return Err(anyhow!("Could not extract mint address from logs"));
     }
 
+    // Validate the extracted mint address
+    if let Err(_) = Pubkey::from_str(&mint_address) {
+        return Err(anyhow!("Invalid mint address format"));
+    }
+
+    println!("Final extracted info - Mint: {}, Is Buy: {}", mint_address, is_buy);
     Ok((mint_address, is_buy))
 }
 
