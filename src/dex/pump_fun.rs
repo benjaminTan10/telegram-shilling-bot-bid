@@ -117,7 +117,32 @@ impl Pump {
 
     pub async fn swap(&self, mint: &str, config: SwapConfig) -> Result<Vec<String>> {
         let logger = Logger::new("[SWAP IN PUMP.FUN] => ".to_string());
-        logger.log(format!("Swapping token: {}", mint));
+        
+        // Validate minimum amount
+        if config.amount == 0 {
+            return Err(anyhow!("Amount cannot be zero"));
+        }
+
+        // For buys, check if we have enough SOL
+        if matches!(config.swap_direction, SwapDirection::Buy) {
+            let wallet_balance = self.client.get_balance(&self.keypair.pubkey()).await?;
+            if wallet_balance <= config.amount {
+                return Err(anyhow!("Insufficient SOL balance for buy"));
+            }
+        }
+
+        // For sells, check if we have enough tokens
+        if matches!(config.swap_direction, SwapDirection::Sell) {
+            let token_balance = self.get_token_balance(mint).await?;
+            if token_balance < config.amount {
+                return Err(anyhow!("Insufficient token balance for sell"));
+            }
+        }
+
+        logger.log(format!(
+            "Swapping token: {} - Amount: {} - Direction: {:?}",
+            mint, config.amount, config.swap_direction
+        ));
         
         let mint_pubkey = Pubkey::from_str(mint)?;
         let wallet_pubkey = self.keypair.pubkey();

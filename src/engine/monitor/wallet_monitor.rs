@@ -361,21 +361,40 @@ fn extract_transaction_info(logs: &[String]) -> Result<(String, bool)> {
 }
 
 async fn execute_swap(pump: &Pump, mint: &str, is_buy: bool, pump_info: &PumpInfo) -> Result<String> {
+    let logger = Logger::new("[EXECUTE SWAP]".to_string());
+    
+    // Calculate copy amount (5% of virtual reserves)
     let amount = if is_buy {
-        // Calculate buy amount based on virtual reserves
-        pump_info.virtual_sol_reserves / 100 // Example: 1% of virtual reserves
+        // For buys: 5% of virtual SOL reserves
+        let copy_amount = (pump_info.virtual_sol_reserves as f64 * 0.05) as u64;
+        logger.info(format!(
+            "Copying buy with 5% - Amount: {} SOL (from {} total)",
+            copy_amount as f64 / 1_000_000_000.0,
+            pump_info.virtual_sol_reserves as f64 / 1_000_000_000.0
+        ));
+        copy_amount
     } else {
-        // Calculate sell amount based on token balance
+        // For sells: 5% of token balance
         let token_balance = pump.get_token_balance(mint).await?;
-        token_balance / 2 // Example: Sell 50% of balance
+        let copy_amount = (token_balance as f64 * 0.05) as u64;
+        logger.info(format!(
+            "Copying sell with 5% - Amount: {} tokens (from {} total)",
+            copy_amount,
+            token_balance
+        ));
+        copy_amount
     };
 
+    // Execute the swap
     let signature = if is_buy {
+        logger.info(format!("Executing buy for {} SOL", amount as f64 / 1_000_000_000.0));
         pump.buy(mint, amount).await?
     } else {
+        logger.info(format!("Executing sell for {} tokens", amount));
         pump.sell(mint, amount).await?
     };
 
+    logger.success(format!("Swap executed successfully: {}", signature));
     Ok(signature)
 }
 
