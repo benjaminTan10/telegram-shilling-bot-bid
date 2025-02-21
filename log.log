@@ -1,3 +1,6 @@
+error is on  match BondingCurveAccount::try_from_slice(data) { 
+
+
    * [NEW TX] => ("4x32fz7kY2EipAneCpwdPKvLzmEwX24RF6UYYk8NdPnLoPFTD7j2qhEpb4amQJf4kPbSGG1rjyQiGVr7L2u7sCJs") - SLOT:(322155010)
    * [FROM] => (o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc)
    * [TIME] => 2025-02-21T15:54:03.816858Z :: (499.813902ms).

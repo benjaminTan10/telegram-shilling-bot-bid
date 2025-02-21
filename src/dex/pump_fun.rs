@@ -217,9 +217,10 @@ pub async fn get_bonding_curve_account(
     program_id: &Pubkey,
 ) -> Result<(Pubkey, Pubkey, BondingCurveAccount)> {
     let logger = Logger::new("[get_bonding_curve_account TX]".to_string());
-        logger.info(format!(
+    logger.info(format!(
         "\n  get_bonding_curve_account called with mint: {} and program_id: {}", mint, program_id
     ));
+
     // Get bonding curve PDA with correct seeds
     let seeds = &[b"bonding-curve", mint.as_ref()];
     let (bonding_curve, _bump) = Pubkey::find_program_address(seeds, program_id);
@@ -233,6 +234,10 @@ pub async fn get_bonding_curve_account(
     // Get associated token account
     let associated_bonding_curve = get_associated_token_address(&bonding_curve, mint);
 
+    logger.info(format!(
+        "\n  get_bonding_curve_account associated_bonding_curve: {}",
+        associated_bonding_curve.to_string()
+    ));
     // Get account data with retries and proper error handling
     let mut retries = 3;
     while retries > 0 {
@@ -248,6 +253,20 @@ pub async fn get_bonding_curve_account(
                 } else {
                     return Err(anyhow!("Account data too short"));
                 };
+                logger.info(format!(
+                    "\n  Raw account data length: {}", account.data.len()
+                ));
+                logger.debug(format!(
+                    "\n  First 8 bytes (discriminator): {:?}", &account.data[..8]
+                ));
+                logger.debug(format!(
+                    "\n  Remaining data length: {}", data.len()
+                ));
+                logger.debug(format!(
+                    "\n  Data hex dump: {:02x?}", data
+                ));
+
+                
 
                 match BondingCurveAccount::try_from_slice(data) {
                     Ok(bonding_curve_data) => {
