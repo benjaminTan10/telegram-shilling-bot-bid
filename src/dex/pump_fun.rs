@@ -31,6 +31,12 @@ pub struct Pump {
     pub keypair: Arc<Keypair>,
 }
 
+#[derive(BorshSerialize, BorshDeserialize)]
+struct SwapInstruction {
+    method: u8,
+    amount: u64,
+}
+
 impl Pump {
     pub fn new(client: Arc<RpcClient>, keypair: Arc<Keypair>) -> Self {
         Self { client, keypair }
@@ -72,106 +78,61 @@ impl Pump {
         Ok(token_account)
     }
 
-    pub async fn buy(&self, mint: &str, amount: u64) -> Result<String> {
-        let mint_pubkey = Pubkey::from_str(mint)?;
-        let wallet_pubkey = self.keypair.pubkey();
-        let token_account = self.ensure_token_account(&mint_pubkey).await?;
-        let bonding_curve = get_bonding_curve(&mint_pubkey)?;
-
-        let buy_data = BuyInstruction { amount };
-        let data = borsh::to_vec(&buy_data)?;
-
-        let instruction = Instruction {
-            program_id: Pubkey::from_str(PUMP_PROGRAM)?,
-            accounts: vec![
-                AccountMeta::new(wallet_pubkey, true),
-                AccountMeta::new(token_account, false),
-                AccountMeta::new(bonding_curve, false),
-                AccountMeta::new_readonly(mint_pubkey, false),
-                AccountMeta::new_readonly(Pubkey::from_str(PUMP_GLOBAL)?, false),
-                AccountMeta::new(Pubkey::from_str(PUMP_FEE_RECIPIENT)?, false),
-                AccountMeta::new_readonly(system_program::ID, false),
-                AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM)?, false),
-            ],
-            data,
-        };
-
-        let recent_blockhash = self.client.get_latest_blockhash().await?;
-        let transaction = solana_sdk::transaction::Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&wallet_pubkey),
-            &[&*self.keypair],
-            recent_blockhash,
-        );
-
-        let signature = self.client.send_and_confirm_transaction(&transaction).await?;
-        Ok(signature.to_string())
-    }
-
-    pub async fn sell(&self, mint: &str, amount: u64) -> Result<String> {
-        let mint_pubkey = Pubkey::from_str(mint)?;
-        let wallet_pubkey = self.keypair.pubkey();
-        let token_account = self.ensure_token_account(&mint_pubkey).await?;
-        let bonding_curve = get_bonding_curve(&mint_pubkey)?;
-
-        let sell_data = SellInstruction { amount };
-        let data = borsh::to_vec(&sell_data)?;
-
-        let instruction = Instruction {
-            program_id: Pubkey::from_str(PUMP_PROGRAM)?,
-            accounts: vec![
-                AccountMeta::new(wallet_pubkey, true),
-                AccountMeta::new(token_account, false),
-                AccountMeta::new(bonding_curve, false),
-                AccountMeta::new_readonly(mint_pubkey, false),
-                AccountMeta::new_readonly(Pubkey::from_str(PUMP_GLOBAL)?, false),
-                AccountMeta::new(Pubkey::from_str(PUMP_FEE_RECIPIENT)?, false),
-                AccountMeta::new_readonly(system_program::ID, false),
-                AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM)?, false),
-            ],
-            data,
-        };
-
-        let recent_blockhash = self.client.get_latest_blockhash().await?;
-        let transaction = solana_sdk::transaction::Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&wallet_pubkey),
-            &[&*self.keypair],
-            recent_blockhash,
-        );
-
-        let signature = self.client.send_and_confirm_transaction(&transaction).await?;
-        Ok(signature.to_string())
-    }
-
     pub async fn swap(&self, mint: &str, config: SwapConfig) -> Result<Vec<String>> {
         let logger = Logger::new("[SWAP IN PUMP.FUN] => ".to_string());
         logger.log(format!("Swapping token: {}", mint));
         
         let mint_pubkey = Pubkey::from_str(mint)?;
-        let owner = self.keypair.as_ref().pubkey();
+        let wallet_pubkey = self.keypair.pubkey();
+        let token_account = self.ensure_token_account(&mint_pubkey).await?;
 
-        // Convert nonblocking client to blocking client for get_pump_info
-        let blocking_client = Arc::new(solana_client::rpc_client::RpcClient::new(
-            self.client.url().to_string()
-        ));
+        // Get bonding curve PDA
+        let seeds = &[b"bonding_curve", mint_pubkey.as_ref()];
+        let (bonding_curve, _) = Pubkey::find_program_address(
+            seeds,
+            &Pubkey::from_str(PUMP_PROGRAM)?
+        );
 
-        // Get pump info with blocking client
-        let pump_info = get_pump_info(blocking_client, mint).await?;
-        
-        // Execute swap based on direction
-        let signature = match config.swap_direction {
-            SwapDirection::Buy => {
-                logger.log(format!("Buying {} SOL worth of tokens", config.amount));
-                self.buy(mint, config.amount).await?
-            }
-            SwapDirection::Sell => {
-                logger.log(format!("Selling {} tokens", config.amount));
-                self.sell(mint, config.amount).await?
-            }
+        // Build instruction data
+        let method = match config.swap_direction {
+            SwapDirection::Buy => 0u8,
+            SwapDirection::Sell => 1u8,
         };
 
-        Ok(vec![signature])
+        let instruction_data = SwapInstruction {
+            method,
+            amount: config.amount,
+        };
+
+        let data = borsh::to_vec(&instruction_data)?;
+
+        // Build instruction
+        let instruction = Instruction {
+            program_id: Pubkey::from_str(PUMP_PROGRAM)?,
+            accounts: vec![
+                AccountMeta::new(wallet_pubkey, true),
+                AccountMeta::new(token_account, false),
+                AccountMeta::new(bonding_curve, false),
+                AccountMeta::new_readonly(mint_pubkey, false),
+                AccountMeta::new_readonly(Pubkey::from_str(PUMP_GLOBAL)?, false),
+                AccountMeta::new(Pubkey::from_str(PUMP_FEE_RECIPIENT)?, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+                AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM)?, false),
+            ],
+            data,
+        };
+
+        // Send transaction
+        let recent_blockhash = self.client.get_latest_blockhash().await?;
+        let transaction = solana_sdk::transaction::Transaction::new_signed_with_payer(
+            &[instruction],
+            Some(&wallet_pubkey),
+            &[&*self.keypair],
+            recent_blockhash,
+        );
+
+        let signature = self.client.send_and_confirm_transaction(&transaction).await?;
+        Ok(vec![signature.to_string()])
     }
 }
 
