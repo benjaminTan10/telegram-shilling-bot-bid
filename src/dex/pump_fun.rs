@@ -216,16 +216,19 @@ pub async fn get_bonding_curve_account(
     mint: &Pubkey,
     program_id: &Pubkey,
 ) -> Result<(Pubkey, Pubkey, BondingCurveAccount)> {
-    tracing::info!("get_bonding_curve_account called with mint: {} and program_id: {}", mint, program_id);
+    let logger = Logger::new("[get_bonding_curve_account TX]".to_string());
+        logger.info(format!(
+        "\n  get_bonding_curve_account called with mint: {} and program_id: {}", mint, program_id
+    ));
     // Get bonding curve PDA with correct seeds
     let seeds = &[b"bonding-curve", mint.as_ref()];
     let (bonding_curve, _bump) = Pubkey::find_program_address(seeds, program_id);
 
-    tracing::info!(
-        "Looking up bonding curve: {} for mint: {}",
+    logger.info(format!(
+        "\n  get_bonding_curve_account PDA: {} for mint: {}",
         bonding_curve.to_string(),
         mint.to_string()
-    );
+    ));
 
     // Get associated token account
     let associated_bonding_curve = get_associated_token_address(&bonding_curve, mint);
@@ -235,7 +238,9 @@ pub async fn get_bonding_curve_account(
     while retries > 0 {
         match rpc_client.get_account(&bonding_curve) {
             Ok(account) => {
-                tracing::info!("Found bonding curve account with {} bytes", account.data.len());
+                logger.info(format!(
+                    "\n  get_bonding_curve_account account found with {} bytes", account.data.len()
+                ));
                 
                 // Skip 8 bytes of discriminator
                 let data = if account.data.len() > 8 {
@@ -254,12 +259,16 @@ pub async fn get_bonding_curve_account(
                         return Ok((bonding_curve, associated_bonding_curve, bonding_curve_data));
                     }
                     Err(e) => {
-                        tracing::warn!("Failed to deserialize account data: {}", e);
+                       logger.error(format!(
+                        "\n  get_bonding_curve_account account data deserialize error: {}", e
+                       ));
                     }
                 }
             }
             Err(e) => {
-                tracing::warn!("Failed to get account: {}", e);
+                logger.error(format!(
+                    "\n  get_bonding_curve_account account get account error: {}", e
+                ));
             }
         }
         retries -= 1;
@@ -277,7 +286,6 @@ pub async fn get_pump_info(
 ) -> Result<PumpInfo> {
     let mint_pubkey = Pubkey::from_str(mint)?;
     let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
-    tracing::info!("get_pump_info  function called.");
     let logger = Logger::new("[get_pump_info TX]".to_string());
     logger.info(format!(
         "\n  get_pump_info  function called. ---"
@@ -298,7 +306,9 @@ pub async fn get_pump_info(
             })
         }
         Err(e) => {
-            tracing::error!("Failed to get bonding curve account: {}", e);
+                logger.error(format!(
+                "\n  get_pump_info account get account error: {}", e
+            ));
             Err(anyhow!("Failed to get bonding curve account: {}", e))
         }
     }
