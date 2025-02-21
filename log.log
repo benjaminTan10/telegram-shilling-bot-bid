@@ -1,23 +1,23 @@
-   * [NEW TX] => ("4TRBDxCTDt99jkqTMQMvXgpSxXadvSL8eRpGdHRyqF8mrXGnC9DBVHW4rT6PSZum7TJTDNqBYDJzeCFufr46xuWU") - SLOT:(322135056)
+   * [NEW TX] => ("4x32fz7kY2EipAneCpwdPKvLzmEwX24RF6UYYk8NdPnLoPFTD7j2qhEpb4amQJf4kPbSGG1rjyQiGVr7L2u7sCJs") - SLOT:(322155010)
    * [FROM] => (o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc)
-   * [TIME] => 2025-02-21T13:42:24.245953Z :: (494.843838ms).
-[2025-02-21 13:42:24.345] [PROCESS TX] [SUCCESS] Found PumpFun transaction!
-[2025-02-21 13:42:24.345] [PROCESS TX] [INFO]
+   * [TIME] => 2025-02-21T15:54:03.816858Z :: (499.813902ms).
+[2025-02-21 15:54:03.921] [PROCESS TX] [SUCCESS] Found PumpFun transaction!
+[2025-02-21 15:54:03.921] [PROCESS TX] [INFO]
    * [PUMP TRANSACTION FOUND] =>
-   * [LOGS] => ["Program ComputeBudget111111111111111111111111111111 invoke [1]", "Program ComputeBudget111111111111111111111111111111 success", "Program ComputeBudget111111111111111111111111111111 invoke [1]", "Program ComputeBudget111111111111111111111111111111 success", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]", "Program log: Instruction: Sell", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]", "Program log: Instruction: Transfer", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4645 of 48762 compute units", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [2]", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 2132 of 40451 compute units", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success", "Program data: vdt/007mYe7ur9c7WKkzvPyj6A1izIKM15IVOBjs2C47g/V5XJH5DxcVbjIAAAAAYyXcDKUaAAAAC8/60geEHarnEMtcmE3t7lADNe2/gxa7NAhBe5Ufe5mwgrhnAAAAAJ5WUAAHAAAABn9raJ3NAwCeqiwEAAAAAAbnWBwMzwIA", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 35586 of 71700 compute units", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success"]
+   * [LOGS] => ["Program ComputeBudget111111111111111111111111111111 invoke [1]", "Program ComputeBudget111111111111111111111111111111 success", "Program ComputeBudget111111111111111111111111111111 invoke [1]", "Program ComputeBudget111111111111111111111111111111 success", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]", "Program log: Instruction: Sell", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]", "Program log: Instruction: Transfer", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4645 of 44266 compute units", "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [2]", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 2132 of 35955 compute units", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success", "Program data: vdt/007mYe4r0lNXqPH0ygApvi95eVvbZUseAGzFOkIRQnVpmK8Pf/+LhkcAAAAAEdrSOEolAAAAC8/60geEHarnEMtcmE3t7lADNe2/gxa7NAhBe5Ufe5mMobhnAAAAAAONGQIHAAAAPhgoSqXMAwAD4fUFAAAAAD6AFf4TzgIA", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P consumed 40082 of 71700 compute units", "Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success"]
    * [TRADE INFO] => TradeInfo { mint: "", amount: 0, is_buy: false }
-[2025-02-21 13:42:24.345] [TX MONITOR] [SUCCESS]
-   * [COPYING TX] => Hash: ("4TRBDxCTDt99jkqTMQMvXgpSxXadvSL8eRpGdHRyqF8mrXGnC9DBVHW4rT6PSZum7TJTDNqBYDJzeCFufr46xuWU")
-   * [SLOT] => (322135056)
-   * [TIME] => 2025-02-21T13:42:24.345925Z :: (594.806715ms).
+[2025-02-21 15:54:03.921] [TX MONITOR] [SUCCESS]
+   * [COPYING TX] => Hash: ("4x32fz7kY2EipAneCpwdPKvLzmEwX24RF6UYYk8NdPnLoPFTD7j2qhEpb4amQJf4kPbSGG1rjyQiGVr7L2u7sCJs")
+   * [SLOT] => (322155010)
+   * [TIME] => 2025-02-21T15:54:03.921337Z :: (604.282037ms).
 Confirmed Sell instruction from logs
 Decoded data length: 129
 Instruction discriminator: 17177263679997991869
 Unknown instruction discriminator
-Extracted mint address: H4jYhV5SHVofeMAFPSUGdvhuTqykwAiMybe6f1nKpump
-Transaction amount: 846075159
-Final extracted info - Mint: H4jYhV5SHVofeMAFPSUGdvhuTqykwAiMybe6f1nKpump, Is Buy: false
-[2025-02-21 13:42:24.345] [COPY TX] [INFO]
-   * [BUILD-IXN](H4jYhV5SHVofeMAFPSUGdvhuTqykwAiMybe6f1nKpump) - 2025-02-21T13:42:24.345982Z :: 49.053µs
-[2025-02-21 13:42:30.849] [COPY TX] [ERROR] Skip H4jYhV5SHVofeMAFPSUGdvhuTqykwAiMybe6f1nKpump by Failed to get bonding curve account data: Failed to get account data: AccountNotFound: pubkey=Cd9g5weDtppFS9MJCvN4Bgq6j4xB97xCHoyx64128voy
-[2025-02-21 13:42:30.849] [PUMPFUN-MONITOR] [TX:0] Found 1 new transactions from target wallet
+Extracted mint address: 3x4YYzN2Fjc6PzGoH4mb6rHFA96hVWLKD6oYpKJrpump
+Transaction amount: 1199999999
+Final extracted info - Mint: 3x4YYzN2Fjc6PzGoH4mb6rHFA96hVWLKD6oYpKJrpump, Is Buy: false
+[2025-02-21 15:54:03.921] [COPY TX] [INFO]
+   * [BUILD-IXN](3x4YYzN2Fjc6PzGoH4mb6rHFA96hVWLKD6oYpKJrpump) - 2025-02-21T15:54:03.921401Z :: 53.991µs
+[2025-02-21 15:54:05.242] [COPY TX] [ERROR] Skip 3x4YYzN2Fjc6PzGoH4mb6rHFA96hVWLKD6oYpKJrpump by Failed to get bonding curve account data: Failed to get bonding curve account: Failed to get valid bonding curve account after retries
+[2025-02-21 15:54:05.242] [PUMPFUN-MONITOR] [TX:0] Found 1 new transactions from target wallet
