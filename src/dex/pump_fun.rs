@@ -4,20 +4,23 @@ use {
         utils::{SwapConfig, SwapDirection},
     },
     anyhow::{anyhow, Result},
-    borsh::{BorshDeserialize, BorshSerialize},
-    solana_client::nonblocking::rpc_client::RpcClient,
-    solana_sdk::{
-        instruction::{AccountMeta, Instruction},
-        pubkey::Pubkey,
-        signature::Keypair,
-        signer::Signer,
-        system_program,
+    anchor_client::{
+        solana_sdk::{
+            native_token::LAMPORTS_PER_SOL,
+            signature::{Keypair, Signature},
+            signer::Signer,
+        },
+        Cluster,
     },
-    spl_associated_token_account::{get_associated_token_address, instruction::create_associated_token_account},
+    pumpfun::{
+        accounts::BondingCurveAccount,
+        PriorityFee,
+        PumpFun as PumpFunClient,
+    },
+    solana_client::nonblocking::rpc_client::RpcClient,
+    solana_sdk::pubkey::Pubkey,
     std::{str::FromStr, sync::Arc},
 };
-use borsh::from_slice;
-use tracing::warn;
 
 pub const PUMP_PROGRAM: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 pub const PUMP_GLOBAL: &str = "4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf";
@@ -32,192 +35,58 @@ pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTN
 pub struct Pump {
     pub client: Arc<RpcClient>,
     pub keypair: Arc<Keypair>,
-}
-
-#[derive(BorshSerialize, BorshDeserialize)]
-struct SwapInstruction {
-    method: u8,
-    amount: u64,
-}
-
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
-pub struct BondingCurveAccount {
-    pub discriminator: [u8; 8],
-    pub is_initialized: bool,
-    pub bump: u8,
-    pub mint: Pubkey,
-    pub authority: Pubkey,
-    pub complete: bool,
-    pub virtual_sol_reserves: u64,
-    pub virtual_token_reserves: u64,
-    pub real_token_reserves: u64,
-    pub real_sol_reserves: u64,
-    pub token_total_supply: u64,
+    pump_client: PumpFunClient,
 }
 
 impl Pump {
     pub fn new(client: Arc<RpcClient>, keypair: Arc<Keypair>) -> Self {
-        Self { client, keypair }
+        let pump_client = PumpFunClient::new(
+            Cluster::Mainnet,
+            keypair.clone(),
+            None,
+            None,
+        );
+
+        Self { 
+            client,
+            keypair,
+            pump_client,
+        }
     }
 
     pub async fn get_token_balance(&self, mint: &str) -> Result<u64> {
         let mint_pubkey = Pubkey::from_str(mint)?;
         let wallet_pubkey = self.keypair.pubkey();
-        let token_account = get_associated_token_address(&wallet_pubkey, &mint_pubkey);
+        let token_account = spl_associated_token_account::get_associated_token_address(
+            &wallet_pubkey,
+            &mint_pubkey
+        );
         
         let balance = self.client.get_token_account_balance(&token_account).await?;
         Ok(balance.amount.parse()?)
     }
 
-    async fn ensure_token_account(&self, mint: &Pubkey) -> Result<Pubkey> {
-        let wallet_pubkey = self.keypair.pubkey();
-        let token_account = get_associated_token_address(&wallet_pubkey, mint);
-
-        // Check if account exists
-        match self.client.get_account(&token_account).await {
-            Ok(_) => Ok(token_account),
-            Err(_) => {
-                // Create ATA if it doesn't exist
-                let create_ata_ix = create_associated_token_account(
-                    &wallet_pubkey,
-                    &wallet_pubkey,
-                    mint,
-                    &Pubkey::from_str(TOKEN_PROGRAM)?,
-                );
-
-                let recent_blockhash = self.client.get_latest_blockhash().await?;
-                let transaction = solana_sdk::transaction::Transaction::new_signed_with_payer(
-                    &[create_ata_ix],
-                    Some(&wallet_pubkey),
-                    &[&*self.keypair],
-                    recent_blockhash,
-                );
-
-                self.client.send_and_confirm_transaction(&transaction).await?;
-                Ok(token_account)
-            }
-        }
-    }
-
     pub async fn buy(&self, mint: &str, amount: u64) -> Result<String> {
-        let config = SwapConfig {
-            amount,
-            swap_direction: SwapDirection::Buy,
-            slippage: 100, // 1% slippage
-            use_jito: false,
-        };
+        let mint_pubkey = Pubkey::from_str(mint)?;
+        let fee = Some(PriorityFee {
+            limit: Some(100_000),
+            price: Some(100_000_000),
+        });
 
-        let signatures = self.swap(mint, config).await?;
-        Ok(signatures[0].clone())
+        let signature = self.pump_client.buy(&mint_pubkey, amount, None, fee).await?;
+        Ok(signature.to_string())
     }
 
     pub async fn sell(&self, mint: &str, amount: u64) -> Result<String> {
-        let config = SwapConfig {
-            amount,
-            swap_direction: SwapDirection::Sell,
-            slippage: 100, // 1% slippage
-            use_jito: false,
-        };
-
-        let signatures = self.swap(mint, config).await?;
-        Ok(signatures[0].clone())
-    }
-
-    pub async fn swap(&self, mint: &str, config: SwapConfig) -> Result<Vec<String>> {
-        let logger = Logger::new("[SWAP IN PUMP.FUN] => ".to_string());
-        
-        // Validate minimum amount
-        if config.amount == 0 {
-            return Err(anyhow!("Amount cannot be zero"));
-        }
-
-        // For buys, check if we have enough SOL
-        if matches!(config.swap_direction, SwapDirection::Buy) {
-            let wallet_balance = self.client.get_balance(&self.keypair.pubkey()).await?;
-            if wallet_balance <= config.amount {
-                return Err(anyhow!("Insufficient SOL balance for buy"));
-            }
-        }
-
-        // For sells, check if we have enough tokens
-        if matches!(config.swap_direction, SwapDirection::Sell) {
-            let token_balance = self.get_token_balance(mint).await?;
-            if token_balance < config.amount {
-                return Err(anyhow!("Insufficient token balance for sell"));
-            }
-        }
-
-        logger.log(format!(
-            "Swapping token: {} - Amount: {} - Direction: {:?}",
-            mint, config.amount, config.swap_direction
-        ));
-        
         let mint_pubkey = Pubkey::from_str(mint)?;
-        let wallet_pubkey = self.keypair.pubkey();
-        let token_account = self.ensure_token_account(&mint_pubkey).await?;
+        let fee = Some(PriorityFee {
+            limit: Some(100_000),
+            price: Some(100_000_000),
+        });
 
-        // Get bonding curve PDA and account data
-        let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
-        let (bonding_curve, _) = Pubkey::find_program_address(
-            &[b"bonding_curve", mint_pubkey.as_ref()],
-            &program_id
-        );
-
-        // Get bonding curve account data
-        let account = self.client.get_account(&bonding_curve)
-            .await
-            .map_err(|_| anyhow!("Failed to get bonding curve account"))?;
-
-        let bonding_curve_data = BondingCurveAccount::try_from_slice(&account.data)
-            .map_err(|_| anyhow!("Failed to deserialize bonding curve data"))?;
-
-        // Build instruction data
-        let method = match config.swap_direction {
-            SwapDirection::Buy => 0u8,
-            SwapDirection::Sell => 1u8,
-        };
-
-        let instruction_data = SwapInstruction {
-            method,
-            amount: config.amount,
-        };
-
-        let data = borsh::to_vec(&instruction_data)?;
-
-        // Build instruction
-        let instruction = Instruction {
-            program_id: Pubkey::from_str(PUMP_PROGRAM)?,
-            accounts: vec![
-                AccountMeta::new(wallet_pubkey, true),
-                AccountMeta::new(token_account, false),
-                AccountMeta::new(bonding_curve, false),
-                AccountMeta::new_readonly(mint_pubkey, false),
-                AccountMeta::new_readonly(Pubkey::from_str(PUMP_GLOBAL)?, false),
-                AccountMeta::new(Pubkey::from_str(PUMP_FEE_RECIPIENT)?, false),
-                AccountMeta::new_readonly(system_program::ID, false),
-                AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM)?, false),
-            ],
-            data,
-        };
-
-        // Send transaction
-        let recent_blockhash = self.client.get_latest_blockhash().await?;
-        let transaction = solana_sdk::transaction::Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&wallet_pubkey),
-            &[&*self.keypair],
-            recent_blockhash,
-        );
-
-        let signature = self.client.send_and_confirm_transaction(&transaction).await?;
-        Ok(vec![signature.to_string()])
+        let signature = self.pump_client.sell(&mint_pubkey, Some(amount), None, fee).await?;
+        Ok(signature.to_string())
     }
-}
-
-pub fn get_pda(mint: &Pubkey, program_id: &Pubkey) -> Result<Pubkey> {
-    let seeds = [b"bonding-curve".as_ref(), mint.as_ref()];
-    let (bonding_curve, _bump) = Pubkey::find_program_address(&seeds, program_id);
-    Ok(bonding_curve)
 }
 
 pub async fn get_bonding_curve_account(
@@ -226,85 +95,22 @@ pub async fn get_bonding_curve_account(
     program_id: &Pubkey,
 ) -> Result<(Pubkey, Pubkey, BondingCurveAccount)> {
     let logger = Logger::new("[get_bonding_curve_account TX]".to_string());
-    logger.info(format!(
-        "\n  Getting bonding curve PDA for mint: {}", mint
-    ));
-
+    
+    // Create PumpFun client
+    let payer = Arc::new(Keypair::new()); // Temporary keypair just for reading data
+    let pump_client = PumpFunClient::new(Cluster::Mainnet, payer, None, None);
+    
     // Get bonding curve PDA
-    let seeds = &[b"bonding-curve".as_ref(), mint.as_ref()];
-    let (bonding_curve, _) = Pubkey::find_program_address(seeds, program_id);
-    logger.info(format!(
-        "\n  Bonding curve PDA: {}", bonding_curve
-    ));
-
-    // Get associated token account
-    let associated_bonding_curve = get_associated_token_address(&bonding_curve, mint);
-    logger.info(format!(
-        "\n  Associated bonding curve: {}", associated_bonding_curve
-    ));
+    let bonding_curve = pump_client.get_bonding_curve_pda(mint);
+    let associated_bonding_curve = spl_associated_token_account::get_associated_token_address(
+        &bonding_curve,
+        mint
+    );
 
     // Get account data
-    logger.info(format!(
-        "\n  Fetching bonding curve account data"
-    ));
-    let account = rpc_client.get_account(&bonding_curve)
-        .map_err(|e| anyhow!("Failed to get bonding curve account: {}", e))?;
+    let bonding_curve_account = pump_client.get_bonding_curve_account(mint).await?;
 
-    logger.info(format!(
-        "\n  Raw account data: {:?}", account.data
-    ));
-
-    // Try to deserialize the entire account data
-    match BondingCurveAccount::try_from_slice(&account.data) {
-        Ok(bonding_curve_account) => {
-            logger.info(format!(
-                "\n  Successfully deserialized bonding curve account: {:?}", 
-                bonding_curve_account
-            ));
-            
-            Ok((bonding_curve, associated_bonding_curve, bonding_curve_account))
-        }
-        Err(e) => {
-            logger.error(format!(
-                "\n  Failed to deserialize bonding curve account: {}", e
-            ));
-            
-            // Try alternative deserialization if needed
-            logger.info(format!(
-                "\n  Attempting alternative deserialization..."
-            ));
-
-            if account.data.len() < 8 {
-                return Err(anyhow!("Account data too short"));
-            }
-
-            // Log the first few bytes to help debug
-            logger.info(format!(
-                "\n  First 8 bytes: {:?}", &account.data[..8]
-            ));
-            
-            let account_data = &account.data[8..];
-            match BondingCurveAccount::try_from_slice(account_data) {
-                Ok(mut bonding_curve_account) => {
-                    // Copy discriminator
-                    bonding_curve_account.discriminator.copy_from_slice(&account.data[..8]);
-                    
-                    logger.info(format!(
-                        "\n  Successfully deserialized with alternative method: {:?}", 
-                        bonding_curve_account
-                    ));
-                    
-                    Ok((bonding_curve, associated_bonding_curve, bonding_curve_account))
-                }
-                Err(e2) => {
-                    logger.error(format!(
-                        "\n  Alternative deserialization also failed: {}", e2
-                    ));
-                    Err(anyhow!("Failed to deserialize bonding curve account: {}", e2))
-                }
-            }
-        }
-    }
+    Ok((bonding_curve, associated_bonding_curve, bonding_curve_account))
 }
 
 pub async fn get_pump_info(
@@ -313,10 +119,6 @@ pub async fn get_pump_info(
 ) -> Result<PumpInfo> {
     let mint_pubkey = Pubkey::from_str(mint)?;
     let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
-    let logger = Logger::new("[get_pump_info TX]".to_string());
-    logger.info(format!(
-        "\n  get_pump_info  function called. ---"
-    ));
 
     match get_bonding_curve_account(rpc_client.clone(), &mint_pubkey, &program_id).await {
         Ok((bonding_curve, associated_bonding_curve, account)) => {
@@ -332,12 +134,7 @@ pub async fn get_pump_info(
                 total_supply: account.token_total_supply,
             })
         }
-        Err(e) => {
-                logger.error(format!(
-                "\n  get_pump_info account get account error: {}", e
-            ));
-            Err(anyhow!("Failed to get bonding curve account: {}", e))
-        }
+        Err(e) => Err(anyhow!("Failed to get bonding curve account: {}", e))
     }
 }
 
