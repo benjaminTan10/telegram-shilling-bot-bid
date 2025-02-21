@@ -36,6 +36,17 @@ struct SwapInstruction {
     amount: u64,
 }
 
+#[derive(Debug, BorshSerialize, BorshDeserialize)]
+pub struct BondingCurveAccount {
+    pub discriminator: u64,
+    pub virtual_token_reserves: u64,
+    pub virtual_sol_reserves: u64,
+    pub real_token_reserves: u64,
+    pub real_sol_reserves: u64,
+    pub token_total_supply: u64,
+    pub complete: bool,
+}
+
 impl Pump {
     pub fn new(client: Arc<RpcClient>, keypair: Arc<Keypair>) -> Self {
         Self { client, keypair }
@@ -109,12 +120,20 @@ impl Pump {
         let wallet_pubkey = self.keypair.pubkey();
         let token_account = self.ensure_token_account(&mint_pubkey).await?;
 
-        // Get bonding curve PDA
-        let seeds = &[b"bonding_curve", mint_pubkey.as_ref()];
+        // Get bonding curve PDA and account data
+        let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
         let (bonding_curve, _) = Pubkey::find_program_address(
-            seeds,
-            &Pubkey::from_str(PUMP_PROGRAM)?
+            &[b"bonding_curve", mint_pubkey.as_ref()],
+            &program_id
         );
+
+        // Get bonding curve account data
+        let account = self.client.get_account(&bonding_curve)
+            .await
+            .map_err(|_| anyhow!("Failed to get bonding curve account"))?;
+
+        let bonding_curve_data = BondingCurveAccount::try_from_slice(&account.data)
+            .map_err(|_| anyhow!("Failed to deserialize bonding curve data"))?;
 
         // Build instruction data
         let method = match config.swap_direction {
@@ -167,27 +186,25 @@ pub async fn get_pump_info(
     let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
     
     // Get bonding curve PDA
-    let seeds = &[b"bonding-curve".as_ref(), mint_pubkey.as_ref()];
-    let (bonding_curve, _) = Pubkey::find_program_address(seeds, &program_id);
+    let (bonding_curve, _) = Pubkey::find_program_address(
+        &[b"bonding_curve", mint_pubkey.as_ref()],
+        &program_id
+    );
 
     // Get bonding curve account data
     let account = rpc_client.get_account(&bonding_curve)
-        .map_err(|_| anyhow!("Bonding curve account not found"))?;
+        .map_err(|e| anyhow!("Failed to get bonding curve account: {}", e))?;
 
     // Deserialize account data
     let bonding_curve_data = BondingCurveAccount::try_from_slice(&account.data)
-        .map_err(|_| anyhow!("Failed to deserialize bonding curve data"))?;
-
-    // Get associated bonding curve
-    let associated_seeds = &[b"associated-bonding-curve".as_ref(), mint_pubkey.as_ref()];
-    let (associated_bonding_curve, _) = Pubkey::find_program_address(associated_seeds, &program_id);
+        .map_err(|e| anyhow!("Failed to deserialize bonding curve data: {}", e))?;
 
     Ok(PumpInfo {
         mint: mint_pubkey.to_string(),
         bonding_curve: bonding_curve.to_string(),
-        associated_bonding_curve: associated_bonding_curve.to_string(),
-        raydium_pool: None, // TODO: Implement if needed
-        raydium_info: None, // TODO: Implement if needed
+        associated_bonding_curve: get_associated_token_address(&bonding_curve, &mint_pubkey).to_string(),
+        raydium_pool: None,
+        raydium_info: None,
         complete: bonding_curve_data.complete,
         virtual_sol_reserves: bonding_curve_data.virtual_sol_reserves,
         virtual_token_reserves: bonding_curve_data.virtual_token_reserves,
@@ -223,16 +240,4 @@ fn get_bonding_curve(mint: &Pubkey) -> Result<Pubkey> {
     let seeds = &[b"bonding-curve".as_ref(), mint.as_ref()];
     let (bonding_curve, _) = Pubkey::find_program_address(seeds, &Pubkey::from_str(PUMP_PROGRAM)?);
     Ok(bonding_curve)
-}
-
-#[derive(Debug, BorshDeserialize)]
-pub struct BondingCurveAccount {
-    pub is_initialized: bool,
-    pub bump: u8,
-    pub mint: Pubkey,
-    pub authority: Pubkey,
-    pub complete: bool,
-    pub virtual_sol_reserves: u64,
-    pub virtual_token_reserves: u64,
-    pub token_total_supply: u64,
 }
