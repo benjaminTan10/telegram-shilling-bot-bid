@@ -6,16 +6,17 @@ use {
     anyhow::{anyhow, Result},
     anchor_client::{
         solana_sdk::{
-            native_token::LAMPORTS_PER_SOL,
-            signature::{Keypair, Signature},
+            signature::Keypair,
             signer::Signer,
         },
         Cluster,
     },
+    borsh::{BorshDeserialize, BorshSerialize},
     pumpfun::{
         accounts::BondingCurveAccount,
         PriorityFee,
         PumpFun as PumpFunClient,
+        error::ClientError,
     },
     solana_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::pubkey::Pubkey,
@@ -73,7 +74,9 @@ impl Pump {
             price: Some(100_000_000),
         });
 
-        let signature = self.pump_client.buy(&mint_pubkey, amount, None, fee).await?;
+        let signature = self.pump_client.buy(&mint_pubkey, amount, None, fee)
+            .await
+            .map_err(|e: ClientError| anyhow!("Buy failed: {}", e))?;
         Ok(signature.to_string())
     }
 
@@ -84,7 +87,9 @@ impl Pump {
             price: Some(100_000_000),
         });
 
-        let signature = self.pump_client.sell(&mint_pubkey, Some(amount), None, fee).await?;
+        let signature = self.pump_client.sell(&mint_pubkey, Some(amount), None, fee)
+            .await
+            .map_err(|e: ClientError| anyhow!("Sell failed: {}", e))?;
         Ok(signature.to_string())
     }
 }
@@ -101,14 +106,16 @@ pub async fn get_bonding_curve_account(
     let pump_client = PumpFunClient::new(Cluster::Mainnet, payer, None, None);
     
     // Get bonding curve PDA
-    let bonding_curve = pump_client.get_bonding_curve_pda(mint);
+    let bonding_curve = PumpFunClient::get_bonding_curve_pda(mint);
     let associated_bonding_curve = spl_associated_token_account::get_associated_token_address(
         &bonding_curve,
         mint
     );
 
     // Get account data
-    let bonding_curve_account = pump_client.get_bonding_curve_account(mint).await?;
+    let bonding_curve_account = pump_client.get_bonding_curve_account(mint)
+        .await
+        .map_err(|e: ClientError| anyhow!("Failed to get bonding curve account: {}", e))?;
 
     Ok((bonding_curve, associated_bonding_curve, bonding_curve_account))
 }
