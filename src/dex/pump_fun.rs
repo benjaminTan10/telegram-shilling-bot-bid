@@ -277,6 +277,8 @@ pub async fn get_pump_info(
 ) -> Result<PumpInfo> {
     let mint_pubkey = Pubkey::from_str(mint)?;
     let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
+    tracing::info!("get_pump_info  function called.");
+  
 
     match get_bonding_curve_account(rpc_client.clone(), &mint_pubkey, &program_id).await {
         Ok((bonding_curve, associated_bonding_curve, account)) => {
