@@ -216,6 +216,7 @@ pub async fn get_bonding_curve_account(
     mint: &Pubkey,
     program_id: &Pubkey,
 ) -> Result<(Pubkey, Pubkey, BondingCurveAccount)> {
+    tracing::info!("get_bonding_curve_account called with mint: {} and program_id: {}", mint, program_id);
     // Get bonding curve PDA with correct seeds
     let seeds = &[b"bonding-curve", mint.as_ref()];
     let (bonding_curve, _bump) = Pubkey::find_program_address(seeds, program_id);
