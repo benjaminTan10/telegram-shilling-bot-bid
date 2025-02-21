@@ -224,24 +224,55 @@ pub async fn get_bonding_curve_account(
     mint: &Pubkey,
     program_id: &Pubkey,
 ) -> Result<(Pubkey, Pubkey, BondingCurveAccount)> {
+    let logger = Logger::new("[get_bonding_curve_account TX]".to_string());
+    logger.info(format!(
+        "\n  Getting bonding curve PDA for mint: {}", mint
+    ));
     let bonding_curve = get_pda(mint, program_id)?;
+    logger.info(format!(
+        "\n  Bonding curve PDA: {}", bonding_curve
+    ));
+
+    logger.info(format!(
+        "\n  Getting associated token address for bonding curve"
+    ));
     let associated_bonding_curve = get_associated_token_address(&bonding_curve, &mint);
+    logger.info(format!(
+        "\n  Associated bonding curve: {}", associated_bonding_curve
+    ));
+
+    logger.info(format!(
+        "\n  Fetching bonding curve account data"
+    ));
     let bonding_curve_data = rpc_client
         .get_account_data(&bonding_curve)
         .inspect_err(|err| {
+            logger.error(format!(
+                "\n  Failed to get bonding curve account data: {}, err: {}",
+                bonding_curve, err
+            ));
             warn!(
                 "Failed to get bonding curve account data: {}, err: {}",
                 bonding_curve, err
             );
         })?;
 
+    logger.info(format!(
+        "\n  Deserializing bonding curve account data"
+    ));
     let bonding_curve_account =
         from_slice::<BondingCurveAccount>(&bonding_curve_data).map_err(|e| {
+            logger.error(format!(
+                "\n  Failed to deserialize bonding curve account: {}", e
+            ));
             anyhow!(
                 "Failed to deserialize bonding curve account: {}",
                 e.to_string()
             )
         })?;
+    logger.info(format!(
+        "\n  Successfully deserialized bonding curve account"
+    ));
 
     Ok((
         bonding_curve,
