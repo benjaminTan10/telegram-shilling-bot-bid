@@ -228,56 +228,60 @@ pub async fn get_bonding_curve_account(
     logger.info(format!(
         "\n  Getting bonding curve PDA for mint: {}", mint
     ));
-
-    // Get bonding curve PDA
-    let seeds = &[b"bonding-curve".as_ref(), mint.as_ref()];
-    let (bonding_curve, _) = Pubkey::find_program_address(seeds, program_id);
+    let bonding_curve = get_pda(mint, program_id)?;
     logger.info(format!(
         "\n  Bonding curve PDA: {}", bonding_curve
     ));
 
-    // Get associated token account
-    let associated_bonding_curve = get_associated_token_address(&bonding_curve, mint);
+    logger.info(format!(
+        "\n  Getting associated token address for bonding curve"
+    ));
+    let associated_bonding_curve = get_associated_token_address(&bonding_curve, &mint);
     logger.info(format!(
         "\n  Associated bonding curve: {}", associated_bonding_curve
     ));
 
-    // Get account data
     logger.info(format!(
         "\n  Fetching bonding curve account data"
     ));
-    let account = rpc_client.get_account(&bonding_curve)
-        .map_err(|e| anyhow!("Failed to get bonding curve account: {}", e))?;
+    let bonding_curve_data = rpc_client
+        .get_account_data(&bonding_curve)
+        .inspect_err(|err| {
+            logger.error(format!(
+                "\n  Failed to get bonding curve account data: {}, err: {}",
+                bonding_curve, err
+            ));
+            warn!(
+                "Failed to get bonding curve account data: {}, err: {}",
+                bonding_curve, err
+            );
+        })?;
 
     logger.info(format!(
-        "\n  bonding_curve_data: {:?}", account.data
+        "\n  bonding_curve_data: {:?}", bonding_curve_data
     ));
     logger.info(format!(
         "\n  Deserializing bonding curve account data"
     ));
-
-    // Skip the first 8 bytes (discriminator) before deserializing
-    if account.data.len() <= 8 {
-        return Err(anyhow!("Account data too short"));
-    }
-    
-    let account_data = &account.data[8..];
-    match BondingCurveAccount::try_from_slice(account_data) {
-        Ok(bonding_curve_account) => {
-            logger.info(format!(
-                "\n  Successfully deserialized bonding curve account: {:?}", 
-                bonding_curve_account
-            ));
-            
-            Ok((bonding_curve, associated_bonding_curve, bonding_curve_account))
-        }
-        Err(e) => {
+    let bonding_curve_account =
+        from_slice::<BondingCurveAccount>(&bonding_curve_data).map_err(|e| {
             logger.error(format!(
                 "\n  Failed to deserialize bonding curve account: {}", e
             ));
-            Err(anyhow!("Failed to deserialize bonding curve account: {}", e))
-        }
-    }
+            anyhow!(
+                "Failed to deserialize bonding curve account: {}",
+                e.to_string()
+            )
+        })?;
+    logger.info(format!(
+        "\n  Successfully deserialized bonding curve account"
+    ));
+
+    Ok((
+        bonding_curve,
+        associated_bonding_curve,
+        bonding_curve_account,
+    ))
 }
 
 pub async fn get_pump_info(
