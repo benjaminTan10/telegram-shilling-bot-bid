@@ -9,12 +9,11 @@ use {
     solana_sdk::{
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
-        signature::{Keypair, Signature},
+        signature::Keypair,
         signer::Signer,
         system_program,
     },
     spl_associated_token_account::{get_associated_token_address, instruction::create_associated_token_account},
-    spl_token::state::Account as TokenAccount,
     std::{str::FromStr, sync::Arc},
 };
 
@@ -83,7 +82,6 @@ impl Pump {
             amount,
             swap_direction: SwapDirection::Buy,
             slippage: 100, // 1% slippage
-            in_type: None,
             use_jito: false,
         };
 
@@ -96,7 +94,6 @@ impl Pump {
             amount,
             swap_direction: SwapDirection::Sell,
             slippage: 100, // 1% slippage
-            in_type: None,
             use_jito: false,
         };
 
