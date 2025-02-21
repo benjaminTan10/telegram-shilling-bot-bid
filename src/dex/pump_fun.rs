@@ -253,6 +253,10 @@ pub async fn get_bonding_curve_account(
                 } else {
                     return Err(anyhow!("Account data too short"));
                 };
+
+                logger.debug(format!(
+                    "\n  First 8 bytes (discriminator): {:?}", &account.data
+                ));
                 logger.info(format!(
                     "\n  Raw account data length: {}", account.data.len()
                 ));
@@ -264,6 +268,9 @@ pub async fn get_bonding_curve_account(
                 ));
                 logger.debug(format!(
                     "\n  Data hex dump: {:02x?}", data
+                ));
+                logger.debug(format!(
+                    "\n  Raw account data: {:?}", account.data
                 ));
 
                 
