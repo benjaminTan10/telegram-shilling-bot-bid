@@ -42,6 +42,7 @@ struct SwapInstruction {
 
 #[derive(Debug, BorshSerialize, BorshDeserialize)]
 pub struct BondingCurveAccount {
+    pub discriminator: [u8; 8],
     pub is_initialized: bool,
     pub bump: u8,
     pub mint: Pubkey,
@@ -250,19 +251,11 @@ pub async fn get_bonding_curve_account(
         .map_err(|e| anyhow!("Failed to get bonding curve account: {}", e))?;
 
     logger.info(format!(
-        "\n  bonding_curve_data: {:?}", account.data
-    ));
-    logger.info(format!(
-        "\n  Deserializing bonding curve account data"
+        "\n  Raw account data: {:?}", account.data
     ));
 
-    // Skip the first 8 bytes (discriminator) before deserializing
-    if account.data.len() <= 8 {
-        return Err(anyhow!("Account data too short"));
-    }
-    
-    let account_data = &account.data[8..];
-    match BondingCurveAccount::try_from_slice(account_data) {
+    // Try to deserialize the entire account data
+    match BondingCurveAccount::try_from_slice(&account.data) {
         Ok(bonding_curve_account) => {
             logger.info(format!(
                 "\n  Successfully deserialized bonding curve account: {:?}", 
@@ -275,7 +268,41 @@ pub async fn get_bonding_curve_account(
             logger.error(format!(
                 "\n  Failed to deserialize bonding curve account: {}", e
             ));
-            Err(anyhow!("Failed to deserialize bonding curve account: {}", e))
+            
+            // Try alternative deserialization if needed
+            logger.info(format!(
+                "\n  Attempting alternative deserialization..."
+            ));
+
+            if account.data.len() < 8 {
+                return Err(anyhow!("Account data too short"));
+            }
+
+            // Log the first few bytes to help debug
+            logger.info(format!(
+                "\n  First 8 bytes: {:?}", &account.data[..8]
+            ));
+            
+            let account_data = &account.data[8..];
+            match BondingCurveAccount::try_from_slice(account_data) {
+                Ok(mut bonding_curve_account) => {
+                    // Copy discriminator
+                    bonding_curve_account.discriminator.copy_from_slice(&account.data[..8]);
+                    
+                    logger.info(format!(
+                        "\n  Successfully deserialized with alternative method: {:?}", 
+                        bonding_curve_account
+                    ));
+                    
+                    Ok((bonding_curve, associated_bonding_curve, bonding_curve_account))
+                }
+                Err(e2) => {
+                    logger.error(format!(
+                        "\n  Alternative deserialization also failed: {}", e2
+                    ));
+                    Err(anyhow!("Failed to deserialize bonding curve account: {}", e2))
+                }
+            }
         }
     }
 }
