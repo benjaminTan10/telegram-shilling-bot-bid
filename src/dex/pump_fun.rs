@@ -24,6 +24,8 @@ pub const PUMP_ACCOUNT: &str = "Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9F1";
 pub const PUMP_BUY_METHOD: u64 = 16927863322537952870;
 pub const PUMP_SELL_METHOD: u64 = 12502976635542562355;
 pub const TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+pub const RENT_PROGRAM: &str = "SysvarRent111111111111111111111111111111111";
+pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 
 pub struct Pump {
     pub client: Arc<RpcClient>,
@@ -38,13 +40,16 @@ struct SwapInstruction {
 
 #[derive(Debug, BorshSerialize, BorshDeserialize)]
 pub struct BondingCurveAccount {
-    pub discriminator: u64,
-    pub virtual_token_reserves: u64,
+    pub is_initialized: bool,
+    pub bump: u8,
+    pub mint: Pubkey,
+    pub authority: Pubkey,
+    pub complete: bool,
     pub virtual_sol_reserves: u64,
+    pub virtual_token_reserves: u64,
     pub real_token_reserves: u64,
     pub real_sol_reserves: u64,
     pub token_total_supply: u64,
-    pub complete: bool,
 }
 
 impl Pump {
@@ -211,39 +216,58 @@ pub async fn get_bonding_curve_account(
     mint: &Pubkey,
     program_id: &Pubkey,
 ) -> Result<(Pubkey, Pubkey, BondingCurveAccount)> {
-    // Get bonding curve PDA
-    let seeds = &[b"bonding_curve", mint.as_ref()];
-    let (bonding_curve, _) = Pubkey::find_program_address(seeds, program_id);
-    
+    // Get bonding curve PDA with correct seeds
+    let seeds = &[b"bonding-curve", mint.as_ref()];
+    let (bonding_curve, _bump) = Pubkey::find_program_address(seeds, program_id);
+
+    tracing::info!(
+        "Looking up bonding curve: {} for mint: {}",
+        bonding_curve.to_string(),
+        mint.to_string()
+    );
+
     // Get associated token account
     let associated_bonding_curve = get_associated_token_address(&bonding_curve, mint);
 
-    // Get account data with retries
+    // Get account data with retries and proper error handling
     let mut retries = 3;
-    let mut last_error = None;
-    
     while retries > 0 {
-        match rpc_client.get_account_data(&bonding_curve) {
-            Ok(data) => {
-                // Deserialize account data
-                match BondingCurveAccount::try_from_slice(&data) {
-                    Ok(account) => {
-                        return Ok((bonding_curve, associated_bonding_curve, account));
+        match rpc_client.get_account(&bonding_curve) {
+            Ok(account) => {
+                tracing::info!("Found bonding curve account with {} bytes", account.data.len());
+                
+                // Skip 8 bytes of discriminator
+                let data = if account.data.len() > 8 {
+                    &account.data[8..]
+                } else {
+                    return Err(anyhow!("Account data too short"));
+                };
+
+                match BondingCurveAccount::try_from_slice(data) {
+                    Ok(bonding_curve_data) => {
+                        // Validate the account data
+                        if bonding_curve_data.mint != *mint {
+                            return Err(anyhow!("Bonding curve mint mismatch"));
+                        }
+
+                        return Ok((bonding_curve, associated_bonding_curve, bonding_curve_data));
                     }
                     Err(e) => {
-                        last_error = Some(anyhow!("Failed to deserialize account data: {}", e));
+                        tracing::warn!("Failed to deserialize account data: {}", e);
                     }
                 }
             }
             Err(e) => {
-                last_error = Some(anyhow!("Failed to get account data: {}", e));
+                tracing::warn!("Failed to get account: {}", e);
             }
         }
         retries -= 1;
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        if retries > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
     }
 
-    Err(last_error.unwrap_or_else(|| anyhow!("Failed to get bonding curve account")))
+    Err(anyhow!("Failed to get valid bonding curve account after retries"))
 }
 
 pub async fn get_pump_info(
@@ -253,36 +277,25 @@ pub async fn get_pump_info(
     let mint_pubkey = Pubkey::from_str(mint)?;
     let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
 
-    // Try to get bonding curve account with retries
-    let mut retries = 3;
-    let mut last_error = None;
-
-    while retries > 0 {
-        match get_bonding_curve_account(rpc_client.clone(), &mint_pubkey, &program_id).await {
-            Ok((bonding_curve, associated_bonding_curve, account)) => {
-                return Ok(PumpInfo {
-                    mint: mint.to_string(),
-                    bonding_curve: bonding_curve.to_string(),
-                    associated_bonding_curve: associated_bonding_curve.to_string(),
-                    raydium_pool: None,
-                    raydium_info: None,
-                    complete: account.complete,
-                    virtual_sol_reserves: account.virtual_sol_reserves,
-                    virtual_token_reserves: account.virtual_token_reserves,
-                    total_supply: account.token_total_supply,
-                });
-            }
-            Err(e) => {
-                last_error = Some(e);
-                retries -= 1;
-                if retries > 0 {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                }
-            }
+    match get_bonding_curve_account(rpc_client.clone(), &mint_pubkey, &program_id).await {
+        Ok((bonding_curve, associated_bonding_curve, account)) => {
+            Ok(PumpInfo {
+                mint: mint.to_string(),
+                bonding_curve: bonding_curve.to_string(),
+                associated_bonding_curve: associated_bonding_curve.to_string(),
+                raydium_pool: None,
+                raydium_info: None,
+                complete: account.complete,
+                virtual_sol_reserves: account.virtual_sol_reserves,
+                virtual_token_reserves: account.virtual_token_reserves,
+                total_supply: account.token_total_supply,
+            })
+        }
+        Err(e) => {
+            tracing::error!("Failed to get bonding curve account: {}", e);
+            Err(anyhow!("Failed to get bonding curve account: {}", e))
         }
     }
-
-    Err(last_error.unwrap_or_else(|| anyhow!("Failed to get pump info")))
 }
 
 pub struct PumpInfo {
