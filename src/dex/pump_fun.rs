@@ -258,6 +258,9 @@ pub async fn get_bonding_curve_account(
         })?;
 
     logger.info(format!(
+        "\n  bonding_curve_data: {:?}", bonding_curve_data
+    ));
+    logger.info(format!(
         "\n  Deserializing bonding curve account data"
     ));
     let bonding_curve_account =
