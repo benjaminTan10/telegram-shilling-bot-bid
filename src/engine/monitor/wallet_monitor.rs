@@ -230,6 +230,9 @@ async fn copy_transaction(state: &AppState, transaction: &EncodedTransactionWith
                 );
 
                 tracing::info!("Before get_pump_info  function");
+                logger.info(format!(
+                    "\n  Before get_pump_info  function"
+                ));
                 // Get pump info
                 match get_pump_info(state.rpc_client.clone(), &mint).await {
                     Ok(pump_info) => {
