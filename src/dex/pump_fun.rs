@@ -82,6 +82,11 @@ impl Pump {
                 );
                 
                 self.client.send_and_confirm_transaction(&transaction).await?;
+                
+                // Verify account was created
+                self.client.get_account(&token_account).await
+                    .map_err(|_| anyhow!("Failed to verify token account creation"))?;
+                
                 Ok(())
             }
         }
@@ -98,11 +103,25 @@ impl Pump {
         // Ensure token account exists
         self.ensure_token_account(mint).await?;
         
-        let balance = self.client.get_token_account_balance(&token_account).await?;
-        Ok(balance.amount.parse()?)
+        // Get balance, return 0 if account not found
+        match self.client.get_token_account_balance(&token_account).await {
+            Ok(balance) => Ok(balance.amount.parse()?),
+            Err(_) => Ok(0)
+        }
     }
 
     pub async fn buy(&self, mint: &str, amount: u64) -> Result<String> {
+        // Don't try to buy if amount is 0
+        if amount == 0 {
+            return Err(anyhow!("Cannot buy with 0 SOL"));
+        }
+
+        // Ensure we have enough SOL balance
+        let wallet_balance = self.client.get_balance(&self.keypair.pubkey()).await?;
+        if wallet_balance < amount {
+            return Err(anyhow!("Insufficient SOL balance: have {}, need {}", wallet_balance, amount));
+        }
+
         // Ensure token account exists before buying
         self.ensure_token_account(mint).await?;
 
@@ -119,8 +138,16 @@ impl Pump {
     }
 
     pub async fn sell(&self, mint: &str, amount: u64) -> Result<String> {
-        // Ensure token account exists before selling
-        self.ensure_token_account(mint).await?;
+        // Don't try to sell if amount is 0
+        if amount == 0 {
+            return Err(anyhow!("Cannot sell 0 tokens"));
+        }
+
+        // Ensure token account exists and we have enough balance
+        let current_balance = self.get_token_balance(mint).await?;
+        if current_balance < amount {
+            return Err(anyhow!("Insufficient token balance: have {}, need {}", current_balance, amount));
+        }
 
         let mint_pubkey = Pubkey::from_str(mint)?;
         let fee = Some(PriorityFee {
