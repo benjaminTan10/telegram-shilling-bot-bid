@@ -116,15 +116,22 @@ impl Pump {
         match self.ensure_token_account(mint).await {
             Ok(_) => (),
             Err(e) => {
-                println!("Warning: Failed to ensure token account: {}", e);
+                println!("Warning: Failed to ensure token account: {} - Assuming 0 balance", e);
                 return Ok(0);
             }
         }
         
         // Get balance, return 0 if account not found
         match self.client.get_token_account_balance(&token_account).await {
-            Ok(balance) => Ok(balance.amount.parse()?),
-            Err(_) => Ok(0)
+            Ok(balance) => {
+                let amount = balance.amount.parse()?;
+                println!("Found token balance: {}", amount);
+                Ok(amount)
+            },
+            Err(e) => {
+                println!("Failed to get token balance: {} - Assuming 0 balance", e);
+                Ok(0)
+            }
         }
     }
 
@@ -158,13 +165,17 @@ impl Pump {
     pub async fn sell(&self, mint: &str, amount: u64) -> Result<String> {
         // Don't try to sell if amount is 0
         if amount == 0 {
-            return Err(anyhow!("Cannot sell 0 tokens"));
+            return Err(anyhow!("Cannot sell 0 tokens - No tokens available in wallet"));
         }
 
         // Ensure token account exists and we have enough balance
         let current_balance = self.get_token_balance(mint).await?;
+        if current_balance == 0 {
+            return Err(anyhow!("No tokens available in wallet to sell"));
+        }
         if current_balance < amount {
-            return Err(anyhow!("Insufficient token balance: have {}, need {}", current_balance, amount));
+            return Err(anyhow!("Insufficient token balance: have {} tokens, trying to sell {} tokens", 
+                current_balance, amount));
         }
 
         let mint_pubkey = Pubkey::from_str(mint)?;
@@ -175,7 +186,7 @@ impl Pump {
 
         let signature = self.pump_client.sell(&mint_pubkey, Some(amount), None, fee)
             .await
-            .map_err(|e: ClientError| anyhow!("Sell failed: {}", e))?;
+            .map_err(|e: ClientError| anyhow!("Sell failed: {} (Balance: {} tokens)", e, current_balance))?;
         Ok(signature.to_string())
     }
 }
