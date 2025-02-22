@@ -1,8 +1,5 @@
 use {
-    crate::common::{
-        logger::Logger,
-        utils::{SwapConfig, SwapDirection},
-    },
+    crate::common::logger::Logger,
     anyhow::{anyhow, Result},
     anchor_client::{
         solana_sdk::{
@@ -102,11 +99,13 @@ pub async fn get_bonding_curve_account(
     let logger = Logger::new("[get_bonding_curve_account TX]".to_string());
     
     // Create PumpFun client
-    let payer = Arc::new(Keypair::new()); // Temporary keypair just for reading data
+    let payer = Arc::new(Keypair::new());
     let pump_client = PumpFunClient::new(Cluster::Mainnet, payer, None, None);
     
     // Get bonding curve PDA
-    let bonding_curve = PumpFunClient::get_bonding_curve_pda(mint);
+    let bonding_curve = PumpFunClient::get_bonding_curve_pda(mint)
+        .ok_or_else(|| anyhow!("Failed to derive bonding curve PDA"))?;
+
     let associated_bonding_curve = spl_associated_token_account::get_associated_token_address(
         &bonding_curve,
         mint
