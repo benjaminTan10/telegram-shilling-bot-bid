@@ -18,6 +18,7 @@ use {
     solana_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::pubkey::Pubkey,
     std::{str::FromStr, sync::Arc},
+    spl_associated_token_account::instruction::create_associated_token_account,
 };
 
 pub const PUMP_PROGRAM: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
@@ -52,6 +53,40 @@ impl Pump {
         }
     }
 
+    pub async fn ensure_token_account(&self, mint: &str) -> Result<()> {
+        let mint_pubkey = Pubkey::from_str(mint)?;
+        let wallet_pubkey = self.keypair.pubkey();
+        let token_account = spl_associated_token_account::get_associated_token_address(
+            &wallet_pubkey,
+            &mint_pubkey
+        );
+        
+        // Check if account exists
+        match self.client.get_account(&token_account).await {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                // Create ATA if it doesn't exist
+                let create_ata_ix = create_associated_token_account(
+                    &self.keypair.pubkey(),
+                    &self.keypair.pubkey(),
+                    &mint_pubkey,
+                    &spl_token::id(),
+                );
+                
+                let recent_blockhash = self.client.get_latest_blockhash().await?;
+                let transaction = solana_sdk::transaction::Transaction::new_signed_with_payer(
+                    &[create_ata_ix],
+                    Some(&self.keypair.pubkey()),
+                    &[&*self.keypair],
+                    recent_blockhash,
+                );
+                
+                self.client.send_and_confirm_transaction(&transaction).await?;
+                Ok(())
+            }
+        }
+    }
+
     pub async fn get_token_balance(&self, mint: &str) -> Result<u64> {
         let mint_pubkey = Pubkey::from_str(mint)?;
         let wallet_pubkey = self.keypair.pubkey();
@@ -60,11 +95,17 @@ impl Pump {
             &mint_pubkey
         );
         
+        // Ensure token account exists
+        self.ensure_token_account(mint).await?;
+        
         let balance = self.client.get_token_account_balance(&token_account).await?;
         Ok(balance.amount.parse()?)
     }
 
     pub async fn buy(&self, mint: &str, amount: u64) -> Result<String> {
+        // Ensure token account exists before buying
+        self.ensure_token_account(mint).await?;
+
         let mint_pubkey = Pubkey::from_str(mint)?;
         let fee = Some(PriorityFee {
             limit: Some(100_000),
@@ -78,6 +119,9 @@ impl Pump {
     }
 
     pub async fn sell(&self, mint: &str, amount: u64) -> Result<String> {
+        // Ensure token account exists before selling
+        self.ensure_token_account(mint).await?;
+
         let mint_pubkey = Pubkey::from_str(mint)?;
         let fee = Some(PriorityFee {
             limit: Some(100_000),

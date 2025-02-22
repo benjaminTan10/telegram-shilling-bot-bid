@@ -239,6 +239,11 @@ async fn copy_transaction(state: &AppState, transaction: &EncodedTransactionWith
                             start_time.elapsed()
                         ));
 
+                        logger.info(format!(
+                            "\n   * [PUMP-INFO] => {:?}",
+                            pump_info
+                        ));
+
                         // Execute swap
                         match execute_swap(&pump, &mint, is_buy, &pump_info).await {
                             Ok(signature) => {
