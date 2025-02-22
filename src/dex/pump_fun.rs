@@ -136,11 +136,11 @@ impl Pump {
 }
 
 pub async fn get_bonding_curve_account(
-    rpc_client: Arc<solana_client::rpc_client::RpcClient>,
+    _rpc_client: Arc<solana_client::rpc_client::RpcClient>,
     mint: &Pubkey,
-    program_id: &Pubkey,
+    _program_id: &Pubkey,
 ) -> Result<(Pubkey, Pubkey, BondingCurveAccount)> {
-    let logger = Logger::new("[get_bonding_curve_account TX]".to_string());
+    let _logger = Logger::new("[get_bonding_curve_account TX]".to_string());
     
     // Create PumpFun client
     let payer = Arc::new(Keypair::new());
@@ -188,6 +188,7 @@ pub async fn get_pump_info(
     }
 }
 
+#[derive(Debug)]
 pub struct PumpInfo {
     pub mint: String,
     pub bonding_curve: String,
@@ -210,10 +211,4 @@ struct BuyInstruction {
 #[derive(BorshSerialize, BorshDeserialize)]
 struct SellInstruction {
     amount: u64,
-}
-
-fn get_bonding_curve(mint: &Pubkey) -> Result<Pubkey> {
-    let seeds = &[b"bonding-curve".as_ref(), mint.as_ref()];
-    let (bonding_curve, _) = Pubkey::find_program_address(seeds, &Pubkey::from_str(PUMP_PROGRAM)?);
-    Ok(bonding_curve)
 } 

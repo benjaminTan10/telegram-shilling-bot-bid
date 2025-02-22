@@ -302,7 +302,7 @@ fn extract_transaction_info(logs: &[String]) -> Result<(String, bool)> {
         // Extract and analyze program data
         if log.starts_with("Program data: ") {
             let data = log.trim_start_matches("Program data: ");
-            if let Ok(decoded) = base64::decode(data) {
+            if let Ok(decoded) = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data) {
                 println!("Decoded data length: {}", decoded.len());
                 
                 // First 8 bytes are instruction discriminator
