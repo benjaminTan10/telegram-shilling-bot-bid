@@ -368,39 +368,70 @@ fn extract_transaction_info(logs: &[String]) -> Result<(String, bool)> {
 async fn execute_swap(pump: &Pump, mint: &str, is_buy: bool, pump_info: &PumpInfo) -> Result<String> {
     let logger = Logger::new("[EXECUTE SWAP]".to_string());
     
-    // Calculate copy amount (5% of virtual reserves)
+    // Calculate copy amount (50% of virtual reserves)
     let amount = if is_buy {
-        // For buys: 5% of virtual SOL reserves
-        let copy_amount = (pump_info.virtual_sol_reserves as f64 * 0.05) as u64;
+        // For buys: 50% of virtual SOL reserves
+        let copy_amount = (pump_info.virtual_sol_reserves as f64 * 0.5) as u64;
         logger.info(format!(
-            "Copying buy with 5% - Amount: {} SOL (from {} total)",
+            "Attempting buy with 50% - Amount: {} SOL (from {} total virtual reserves)",
             copy_amount as f64 / 1_000_000_000.0,
             pump_info.virtual_sol_reserves as f64 / 1_000_000_000.0
         ));
+
+        // Check wallet SOL balance
+        if let Ok(wallet_balance) = pump.client.get_balance(&pump.keypair.pubkey()).await {
+            logger.info(format!(
+                "Current wallet SOL balance: {} SOL",
+                wallet_balance as f64 / 1_000_000_000.0
+            ));
+        }
+
         copy_amount
     } else {
-        // For sells: 5% of token balance
+        // For sells: First check current token balance
         let token_balance = pump.get_token_balance(mint).await?;
-        let copy_amount = (token_balance as f64 * 0.05) as u64;
         logger.info(format!(
-            "Copying sell with 5% - Amount: {} tokens (from {} total)",
+            "Current token balance before sell: {} tokens",
+            token_balance
+        ));
+
+        // For sells: 50% of token balance if we have any
+        let copy_amount = (token_balance as f64 * 0.5) as u64;
+        logger.info(format!(
+            "Attempting sell with 50% - Amount: {} tokens (from {} total balance)",
             copy_amount,
             token_balance
         ));
+
+        // Additional info about virtual reserves
+        logger.info(format!(
+            "Virtual reserves - SOL: {} SOL, Tokens: {} tokens",
+            pump_info.virtual_sol_reserves as f64 / 1_000_000_000.0,
+            pump_info.virtual_token_reserves
+        ));
+
         copy_amount
     };
 
     // Execute the swap
     let signature = if is_buy {
         logger.info(format!("Executing buy for {} SOL", amount as f64 / 1_000_000_000.0));
-        pump.buy(mint, amount).await?
+        pump.buy(mint, amount).await
     } else {
+        if amount == 0 {
+            logger.error("Cannot execute sell - No tokens available in wallet".to_string());
+            return Err(anyhow!("No tokens available to sell"));
+        }
         logger.info(format!("Executing sell for {} tokens", amount));
-        pump.sell(mint, amount).await?
+        pump.sell(mint, amount).await
     };
 
-    logger.success(format!("Swap executed successfully: {}", signature));
-    Ok(signature)
+    match &signature {
+        Ok(sig) => logger.success(format!("Swap executed successfully: {}", sig)),
+        Err(e) => logger.error(format!("Swap failed: {}", e)),
+    }
+
+    signature
 }
 
 #[derive(Debug)]
