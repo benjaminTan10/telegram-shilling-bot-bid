@@ -17,8 +17,9 @@ use {
     },
     solana_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::pubkey::Pubkey,
-    std::{str::FromStr, sync::Arc},
+    std::{str::FromStr, sync::Arc, time::Duration},
     spl_associated_token_account::instruction::create_associated_token_account,
+    tokio::time::sleep,
 };
 
 pub const PUMP_PROGRAM: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
@@ -81,13 +82,24 @@ impl Pump {
                     recent_blockhash,
                 );
                 
-                self.client.send_and_confirm_transaction(&transaction).await?;
+                // Send transaction and wait for confirmation
+                self.client.send_and_confirm_transaction_with_spinner(&transaction).await?;
                 
-                // Verify account was created
-                self.client.get_account(&token_account).await
-                    .map_err(|_| anyhow!("Failed to verify token account creation"))?;
+                // Wait a moment for account to be available
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 
-                Ok(())
+                // Try multiple times to verify account creation
+                for _ in 0..3 {
+                    match self.client.get_account(&token_account).await {
+                        Ok(_) => return Ok(()),
+                        Err(_) => {
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            continue;
+                        }
+                    }
+                }
+                
+                Err(anyhow!("Failed to verify token account creation after multiple attempts"))
             }
         }
     }
@@ -100,8 +112,14 @@ impl Pump {
             &mint_pubkey
         );
         
-        // Ensure token account exists
-        self.ensure_token_account(mint).await?;
+        // Try to ensure token account exists
+        match self.ensure_token_account(mint).await {
+            Ok(_) => (),
+            Err(e) => {
+                println!("Warning: Failed to ensure token account: {}", e);
+                return Ok(0);
+            }
+        }
         
         // Get balance, return 0 if account not found
         match self.client.get_token_account_balance(&token_account).await {
