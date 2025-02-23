@@ -1,5 +1,11 @@
 use {
-    tonic::{transport::Channel, Request, Response, Status},
+    tonic::{
+        transport::Channel,
+        Request,
+        Response,
+        Status,
+        metadata::MetadataValue,
+    },
     futures_util::Stream,
     anyhow::Result,
     std::{pin::Pin, collections::HashMap},
