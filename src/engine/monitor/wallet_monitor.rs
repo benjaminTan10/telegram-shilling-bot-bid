@@ -86,7 +86,7 @@ pub async fn monitor_wallet(
     // Process notifications in real-time
     while let Some(notification) = notifications.next().await {
         match notification {
-            Response { value: response, .. } => {
+            RpcResponse { value: response, .. } => {
                 logger.info(format!(
                     "\n[NEW ACCOUNT UPDATE] => Time: {}", 
                     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
@@ -120,7 +120,7 @@ pub async fn monitor_wallet(
                     }
                 }
             }
-            Response { value: Err(e), .. } => {
+            RpcResponse { value: Err(e), .. } => {
                 logger.error(format!("WebSocket error: {}", e));
                 tokio::time::sleep(Duration::from_secs(RETRY_DELAY)).await;
             }
