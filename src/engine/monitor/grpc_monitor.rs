@@ -24,7 +24,9 @@ use {
         metadata::MetadataValue,
         Response,
     },
-    tonic_health::pb::health_client::HealthClient
+    tonic_health::pb::health_client::HealthClient,
+    futures_util::SinkExt,
+    futures_util::StreamExt,
 };
 
 const TARGET_WALLET: &str = "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc";
@@ -35,21 +37,25 @@ pub async fn monitor_transactions_grpc(
 ) -> Result<()> {
     let logger = Logger::new("[GRPC-MONITOR]".to_string());
     
-    // Create gRPC channel
+    // Create gRPC channel with interceptor
     let channel = Channel::from_shared(grpc_url.to_string())?
         .connect()
         .await?;
 
-    // Create health and geyser clients
-    let health_client = HealthClient::new(channel.clone());
-    let geyser_client = GeyserClient::new(channel);
+    // Add auth token interceptor
+    let token = std::env::var("RPC_TOKEN")?;
+    let token_value = MetadataValue::try_from(token)?;
+    let interceptor = move |mut req: Request<()>| {
+        req.metadata_mut().insert("x-token", token_value.clone());
+        Ok(req)
+    };
+
+    // Create health and geyser clients with interceptor
+    let health_client = HealthClient::with_interceptor(channel.clone(), interceptor.clone());
+    let geyser_client = GeyserClient::with_interceptor(channel, interceptor);
 
     // Create gRPC client
     let mut client = GeyserGrpcClient::new(health_client, geyser_client);
-
-    // Add auth token
-    let token = MetadataValue::try_from(std::env::var("RPC_TOKEN")?)?;
-    client.add_headers(vec![("x-token", token)])?;
 
     logger.info(format!(
         "\n[INIT] => [GRPC MONITOR ENVIRONMENT]: 
@@ -86,39 +92,29 @@ pub async fn monitor_transactions_grpc(
         match message {
             Ok(msg) => {
                 if let Some(UpdateOneof::Transaction(tx)) = msg.update_oneof {
-                    // Get signature from transaction data
-                    let signature = if let Some(tx_data) = &tx.transaction {
-                        tx_data.signature.clone()
-                    } else {
-                        continue;
-                    };
+                    if let Some(tx_data) = &tx.transaction {
+                        if let Some(meta) = &tx_data.meta {
+                            if let Some(logs) = &meta.log_messages {
+                                if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
+                                    logger.success("Found PumpFun transaction!".to_string());
 
-                    logger.info(format!(
-                        "\n[NEW TRANSACTION] => Time: {}, Signature: {}", 
-                        Utc::now(),
-                        bs58::encode(&signature).into_string()
-                    ));
+                                    // Extract transaction data and execute copy trade
+                                    if let Ok((mint, is_buy)) = extract_transaction_info_from_logs(&logs) {
+                                        // Create Pump instance and execute swap
+                                        let pump = Pump::new(
+                                            state.rpc_nonblocking_client.clone(),
+                                            state.wallet.clone(),
+                                        );
 
-                    // Process transaction logs
-                    if let Some(logs) = tx.transaction.and_then(|t| t.meta.logs) {
-                        if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
-                            logger.success("Found PumpFun transaction!".to_string());
-
-                            // Extract transaction data and execute copy trade
-                            if let Ok((mint, is_buy)) = extract_transaction_info_from_logs(&logs) {
-                                // Create Pump instance and execute swap
-                                let pump = Pump::new(
-                                    state.rpc_nonblocking_client.clone(),
-                                    state.wallet.clone(),
-                                );
-
-                                if let Ok(pump_info) = get_pump_info(state.rpc_client.clone(), &mint).await {
-                                    match execute_swap(&pump, &mint, is_buy, &pump_info).await {
-                                        Ok(signature) => {
-                                            logger.success(format!("Successfully copied trade: {}", signature));
-                                        }
-                                        Err(e) => {
-                                            logger.error(format!("Failed to copy trade: {}", e));
+                                        if let Ok(pump_info) = get_pump_info(state.rpc_client.clone(), &mint).await {
+                                            match execute_swap(&pump, &mint, is_buy, &pump_info).await {
+                                                Ok(signature) => {
+                                                    logger.success(format!("Successfully copied trade: {}", signature));
+                                                }
+                                                Err(e) => {
+                                                    logger.error(format!("Failed to copy trade: {}", e));
+                                                }
+                                            }
                                         }
                                     }
                                 }

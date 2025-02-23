@@ -87,7 +87,7 @@ pub async fn monitor_wallet(
     // Process notifications in real-time
     while let Some(notification) = notifications.next().await {
         match notification {
-            RpcResponse { value: response, .. } => {
+            RpcResponse { value: Ok(response), .. } => {
                 logger.info(format!(
                     "\n[NEW ACCOUNT UPDATE] => Time: {}", 
                     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)

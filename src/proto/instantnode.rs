@@ -65,29 +65,17 @@ impl InstantNodeClient {
         &mut self,
         mut request: Request<SubscribeRequest>,
     ) -> Result<Response<Pin<Box<dyn Stream<Item = Result<TransactionUpdate, Status>> + Send + 'static>>>> {
-        // Add authentication header
-        request.metadata_mut().insert(
-            "x-token",
-            tonic::metadata::MetadataValue::from_static(std::env::var("RPC_TOKEN")?.as_str()),
-        );
+        // Store token in a variable to extend its lifetime
+        let token = std::env::var("RPC_TOKEN")?;
+        let token_value = MetadataValue::try_from(token)?;
+        request.metadata_mut().insert("x-token", token_value);
         
-        // Create streaming response
+        // Create stream without capturing self
+        let channel = self.channel.clone();
+        let endpoint = self.endpoint.clone();
+        
         let stream = Box::pin(stream! {
-            loop {
-                match self.get_next_transaction().await {
-                    Ok(update) => yield Ok(update),
-                    Err(e) => {
-                        yield Err(Status::internal(format!("Stream error: {}", e)));
-                        break;
-                    }
-                }
-            }
-        });
-
-        let owned_channel = self.channel.clone();
-        let owned_endpoint = self.endpoint.clone();
-        let stream = Box::pin(stream! {
-            let mut client = InstantNodeClient::new(owned_channel, owned_endpoint);
+            let client = InstantNodeClient::new(channel, endpoint);
             loop {
                 match client.get_next_transaction().await {
                     Ok(update) => yield Ok(update),
@@ -98,6 +86,7 @@ impl InstantNodeClient {
                 }
             }
         });
+
         Ok(Response::new(stream))
     }
 
