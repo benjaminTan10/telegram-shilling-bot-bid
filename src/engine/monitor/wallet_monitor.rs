@@ -124,10 +124,6 @@ pub async fn monitor_wallet(
                     }
                 }
             }
-            Err(e) => {
-                logger.error(format!("WebSocket error: {}", e));
-                tokio::time::sleep(Duration::from_secs(RETRY_DELAY)).await;
-            }
         }
     }
 
