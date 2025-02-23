@@ -95,26 +95,25 @@ pub async fn monitor_transactions_grpc(
                 if let Some(UpdateOneof::Transaction(tx)) = msg.update_oneof {
                     if let Some(tx_data) = &tx.transaction {
                         if let Some(meta) = &tx_data.meta {
-                            if let Some(ref logs) = meta.log_messages {
-                                if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
-                                    logger.success("Found PumpFun transaction!".to_string());
+                            let logs = &meta.log_messages;
+                            if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
+                                logger.success("Found PumpFun transaction!".to_string());
 
-                                    // Extract transaction data and execute copy trade
-                                    if let Ok((mint, is_buy)) = extract_transaction_info_from_logs(logs) {
-                                        // Create Pump instance and execute swap
-                                        let pump = Pump::new(
-                                            state.rpc_nonblocking_client.clone(),
-                                            state.wallet.clone(),
-                                        );
+                                // Extract transaction data and execute copy trade
+                                if let Ok((mint, is_buy)) = extract_transaction_info_from_logs(logs) {
+                                    // Create Pump instance and execute swap
+                                    let pump = Pump::new(
+                                        state.rpc_nonblocking_client.clone(),
+                                        state.wallet.clone(),
+                                    );
 
-                                        if let Ok(pump_info) = get_pump_info(state.rpc_client.clone(), &mint).await {
-                                            match execute_swap(&pump, &mint, is_buy, &pump_info).await {
-                                                Ok(signature) => {
-                                                    logger.success(format!("Successfully copied trade: {}", signature));
-                                                }
-                                                Err(e) => {
-                                                    logger.error(format!("Failed to copy trade: {}", e));
-                                                }
+                                    if let Ok(pump_info) = get_pump_info(state.rpc_client.clone(), &mint).await {
+                                        match execute_swap(&pump, &mint, is_buy, &pump_info).await {
+                                            Ok(signature) => {
+                                                logger.success(format!("Successfully copied trade: {}", signature));
+                                            }
+                                            Err(e) => {
+                                                logger.error(format!("Failed to copy trade: {}", e));
                                             }
                                         }
                                     }
