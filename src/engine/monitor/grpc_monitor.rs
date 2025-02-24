@@ -37,7 +37,7 @@ pub async fn monitor_transactions_grpc(
     ));
 
     // Create gRPC client
-    let mut client = geyser_client::GeyserClient::new(channel);
+    let mut client = GeyserClient::new(channel);
 
     // Subscribe to transaction updates
     let request = Request::new(SubscribeRequest {

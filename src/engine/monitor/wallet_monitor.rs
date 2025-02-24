@@ -1,7 +1,7 @@
 use {
     crate::{
         common::{logger::Logger, utils::AppState},
-        dex::pump_fun::{Pump, PumpInfo, get_pump_info, execute_swap},
+        dex::pump_fun::{Pump, PumpInfo, get_pump_info},
     },
     anyhow::{anyhow, Result},
     solana_client::rpc_config::RpcTransactionConfig,
@@ -84,7 +84,7 @@ pub async fn monitor_wallet(
     // Process notifications in real-time
     while let Some(notification) = notifications.next().await {
         match notification {
-            Ok(update) => {
+            Ok(response) => {
                 logger.info(format!(
                     "\n[NEW ACCOUNT UPDATE] => Time: {}", 
                     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
@@ -120,6 +120,7 @@ pub async fn monitor_wallet(
             }
             Err(e) => {
                 logger.error(format!("WebSocket error: {}", e));
+                tokio::time::sleep(Duration::from_secs(RETRY_DELAY)).await;
             }
         }
     }
