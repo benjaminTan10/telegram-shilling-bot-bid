@@ -4,6 +4,7 @@ use {
     anyhow::Result,
     std::{pin::Pin, collections::HashMap},
     async_stream::stream,
+    std::str::FromStr,
 };
 
 #[derive(Debug)]
@@ -67,7 +68,7 @@ impl InstantNodeClient {
         // Add authentication header
         request.metadata_mut().insert(
             "x-token",
-            tonic::metadata::MetadataValue::from_str(&std::env::var("RPC_TOKEN")?)?
+            tonic::metadata::MetadataValue::from_static(&std::env::var("RPC_TOKEN")?)
         );
         
         // Create streaming response

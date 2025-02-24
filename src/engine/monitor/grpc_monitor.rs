@@ -5,8 +5,8 @@ use {
     },
     anyhow::Result,
     futures::StreamExt,
-    std::{collections::HashMap, time::Duration},
-    yellowstone_grpc_client::{GeyserGrpcClient, GeyserGrpcClientError},
+    std::time::Duration,
+    yellowstone_grpc_client::{GeyserGrpcClient, GeyserClient},
     yellowstone_grpc_proto::prelude::{
         subscribe_update::UpdateOneof,
         CommitmentLevel,
@@ -16,6 +16,8 @@ use {
     base64::Engine as _,
     bs58,
     chrono::Utc,
+    solana_sdk::signature::Signer,
+    tonic::transport::Channel,
 };
 
 const TARGET_WALLET: &str = "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc";
@@ -26,11 +28,18 @@ pub async fn monitor_transactions_grpc(
 ) -> Result<()> {
     let logger = Logger::new("[GRPC-MONITOR]".to_string());
     
-    // Create gRPC client
-    let mut client = GeyserGrpcClient::new(grpc_url.to_string())
-        .x_token(std::env::var("RPC_TOKEN")?)?
+    // Create gRPC channel
+    let channel = Channel::from_shared(grpc_url.to_string())?
         .connect()
         .await?;
+
+    // Create gRPC client with health check client
+    let health_client = tonic_health::proto::health_client::HealthClient::new(channel.clone());
+    let geyser_client = GeyserClient::new(channel);
+    let mut client = GeyserGrpcClient::new(health_client, geyser_client);
+
+    // Add auth token
+    client.set_token(std::env::var("RPC_TOKEN")?);
 
     logger.info(format!(
         "\n[INIT] => [GRPC MONITOR ENVIRONMENT]: 
@@ -66,7 +75,7 @@ pub async fn monitor_transactions_grpc(
     while let Some(message) = stream.next().await {
         match message {
             Ok(msg) => {
-                if let Some(UpdateOneof::TransactionInfo(tx)) = msg.update_oneof {
+                if let Some(UpdateOneof::Transaction(tx)) = msg.update_oneof {
                     logger.info(format!(
                         "\n[NEW TRANSACTION] => Time: {}, Signature: {}", 
                         Utc::now(),
