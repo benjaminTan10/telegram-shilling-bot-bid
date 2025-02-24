@@ -1,4 +1,8 @@
-use tonic::transport::Channel;
+use {
+    tonic::{transport::Channel, Request, Response},
+    futures_util::Stream,
+    anyhow::Result,
+};
 use solana_sdk::pubkey::Pubkey;
 
 #[derive(Debug)]
@@ -37,7 +41,7 @@ impl GeyserClient {
     }
 
     pub async fn subscribe(&mut self, request: Request<SubscribeRequest>) 
-        -> Result<tonic::Response<impl futures_util::Stream<Item = Result<TransactionUpdate, tonic::Status>>>> {
+        -> Result<Response<impl Stream<Item = Result<TransactionUpdate, tonic::Status>>>> {
         // TODO: Implement actual gRPC subscription
         unimplemented!("gRPC subscription not yet implemented")
     }

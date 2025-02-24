@@ -270,5 +270,20 @@ struct SellInstruction {
 }
 
 pub async fn execute_swap(pump: &Pump, mint: &str, is_buy: bool, pump_info: &PumpInfo) -> Result<String> {
-    // ... existing implementation ...
+    let logger = Logger::new("[EXECUTE SWAP]".to_string());
+    
+    // Calculate copy amount (50% of virtual reserves)
+    let amount = if is_buy {
+        (pump_info.virtual_sol_reserves as f64 * 0.5) as u64
+    } else {
+        let token_balance = pump.get_token_balance(mint).await?;
+        (token_balance as f64 * 0.5) as u64
+    };
+
+    // Execute the swap
+    if is_buy {
+        pump.buy(mint, amount).await
+    } else {
+        pump.sell(mint, amount).await
+    }
 } 
