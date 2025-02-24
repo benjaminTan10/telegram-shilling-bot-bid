@@ -24,7 +24,7 @@ use {
         metadata::MetadataValue,
         Response,
     },
-    tonic_health::proto::health_client::HealthClient,
+    tonic_health::pb::health_client::HealthClient
 };
 
 const TARGET_WALLET: &str = "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc";
