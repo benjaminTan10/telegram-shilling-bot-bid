@@ -3,10 +3,12 @@ use {
     futures_util::Stream,
     anyhow::Result,
     std::pin::Pin,
+    async_stream::stream,
 };
 
 #[derive(Debug)]
 pub struct InstantNodeClient {
+    endpoint: String,
     channel: Channel,
 }
 
@@ -28,8 +30,8 @@ pub struct TransactionUpdate {
 }
 
 impl InstantNodeClient {
-    pub fn new(channel: Channel) -> Self {
-        Self { channel }
+    pub fn new(channel: Channel, endpoint: String) -> Self {
+        Self { channel, endpoint }
     }
 
     pub async fn subscribe_transactions(
@@ -37,13 +39,13 @@ impl InstantNodeClient {
         request: Request<SubscribeRequest>,
     ) -> Result<Response<Pin<Box<dyn Stream<Item = Result<TransactionUpdate, Status>> + Send + 'static>>>> {
         // Create subscription URL
-        let subscription_url = format!("{}/subscribe_transactions", self.channel.uri());
+        let subscription_url = format!("{}/subscribe_transactions", self.endpoint);
         
         // Set up subscription parameters
         let request = tonic::Request::new(request.into_inner());
         
         // Create streaming response
-        let stream = Box::pin(async_stream::stream! {
+        let stream = Box::pin(stream! {
             loop {
                 // Make gRPC call to get next transaction
                 match self.get_next_transaction().await {
