@@ -5,7 +5,7 @@ use {
             logger::Logger,
             utils::{create_nonblocking_rpc_client, create_rpc_client, import_env_var, import_wallet, AppState},
         },
-        engine::monitor::wallet_monitor::monitor_wallet,
+        engine::monitor::grpc_monitor::monitor_transactions_grpc,
     },
     anyhow::Result,
     solana_sdk::signature::Signer,
@@ -41,13 +41,13 @@ async fn main() -> Result<()> {
 
     // Get configuration from environment
     let slippage = import_env_var("SLIPPAGE").parse::<u64>().unwrap_or(5);
-    let ws_url = import_env_var("RPC_WSS");
+    let grpc_url = import_env_var("RPC_GRPC");
     
     logger.success("Bot initialization complete".to_string());
-    logger.info("Starting wallet monitor...".to_string());
+    logger.info("Starting gRPC transaction monitor...".to_string());
 
-    // Start monitoring
-    monitor_wallet(&ws_url, state, slippage, true).await?;
+    // Start gRPC monitoring
+    monitor_transactions_grpc(&grpc_url, state).await?;
 
     Ok(())
 }
