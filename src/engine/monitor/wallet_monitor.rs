@@ -4,7 +4,10 @@ use {
         dex::pump_fun::{Pump, PumpInfo, get_pump_info},
     },
     anyhow::{anyhow, Result},
-    solana_client::rpc_config::RpcTransactionConfig,
+    solana_client::{
+        rpc_config::RpcTransactionConfig,
+        rpc_response::Response as RpcResponse,
+    },
     solana_sdk::{
         commitment_config::CommitmentConfig,
         pubkey::Pubkey,
@@ -14,18 +17,16 @@ use {
         EncodedTransaction, 
         UiTransactionEncoding,
         EncodedTransactionWithStatusMeta,
+        UiAccount,
     },
     solana_account_decoder::UiAccountEncoding,
     std::{str::FromStr, time::{Duration, Instant}},
-    tokio::time,
     chrono::Utc,
     base64,
     bs58,
     futures_util::stream::StreamExt,
     solana_transaction_status::option_serializer::OptionSerializer,
-    tonic::Response,
-    solana_client::rpc_response::Response as RpcResponse,
-
+    tokio::time,
 };
 
 const RETRY_DELAY: u64 = 5; // seconds
@@ -87,7 +88,7 @@ pub async fn monitor_wallet(
     // Process notifications in real-time
     while let Some(notification) = notifications.next().await {
         match notification {
-            RpcResponse { value: Ok(response), .. } => {
+            RpcResponse { value: account_info, .. } => {
                 logger.info(format!(
                     "\n[NEW ACCOUNT UPDATE] => Time: {}", 
                     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
