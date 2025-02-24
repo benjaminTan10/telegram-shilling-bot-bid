@@ -84,6 +84,20 @@ impl InstantNodeClient {
             }
         });
 
+        let owned_channel = self.channel.clone();
+        let owned_endpoint = self.endpoint.clone();
+        let stream = Box::pin(stream! {
+            let mut client = InstantNodeClient::new(owned_channel, owned_endpoint);
+            loop {
+                match client.get_next_transaction().await {
+                    Ok(update) => yield Ok(update),
+                    Err(e) => {
+                        yield Err(Status::internal(format!("Stream error: {}", e)));
+                        break;
+                    }
+                }
+            }
+        });
         Ok(Response::new(stream))
     }
 
