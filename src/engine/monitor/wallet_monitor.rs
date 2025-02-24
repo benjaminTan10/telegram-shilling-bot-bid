@@ -16,11 +16,13 @@ use {
         EncodedTransactionWithStatusMeta,
         option_serializer::OptionSerializer,
     },
+    solana_account_decoder::UiAccountEncoding,
     std::{str::FromStr, time::{Duration, Instant}},
     tokio::time,
     chrono::Utc,
     base64,
     bs58,
+    futures_util::stream::StreamExt,
 };
 
 const RETRY_DELAY: u64 = 5; // seconds
@@ -75,7 +77,7 @@ pub async fn monitor_wallet(
     // Handle cleanup on drop
     let _cleanup = scopeguard::guard(unsubscribe, |unsub| {
         tokio::spawn(async move {
-            let _ = unsub.await;
+            let _ = unsub().await;
         });
     });
 
