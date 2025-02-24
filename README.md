@@ -4,6 +4,8 @@
 
 Introducing the **Solana PumpFun Copy Trading Bot** written in **Rust** 🦀, designed to monitor and replicate trades on **Pump.fun** with lightning speed ⚡. Built with Rust for superior performance and security, this bot tracks specific wallets for trading signals and executes copy trades using Jito MEV integration for enhanced transaction priority. Perfect for traders looking to automatically mirror successful trading strategies on PumpFun DEX.
 
+![image](https://github.com/user-attachments/assets/028dabb0-6f34-404e-9495-3fdf94835104)
+
 ---
 
 ## Key Features
