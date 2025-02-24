@@ -28,11 +28,9 @@ pub async fn monitor_transactions_grpc(
 ) -> Result<()> {
     let logger = Logger::new("[GRPC-MONITOR]".to_string());
     
-    // Create gRPC client with TLS config
-    let mut client = GeyserGrpcClient::builder()
-        .url(grpc_url)?
-        .token(std::env::var("RPC_TOKEN")?)?
-        .tls_config(ClientTlsConfig::new().with_native_roots())?
+    // Create gRPC client
+    let mut client = GeyserGrpcClient::new(grpc_url.to_string())
+        .x_token(std::env::var("RPC_TOKEN")?)?
         .connect()
         .await?;
 
@@ -85,7 +83,7 @@ pub async fn monitor_transactions_grpc(
                     ));
 
                     // Process transaction logs
-                    if let Some(logs) = tx.meta.and_then(|m| m.log_messages) {
+                    if let Some(logs) = tx.transaction.and_then(|t| t.message_logs) {
                         if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
                             logger.success("Found PumpFun transaction!".to_string());
 
