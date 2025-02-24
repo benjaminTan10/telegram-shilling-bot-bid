@@ -3350,6 +3350,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
+ "tonic-health",
  "tracing",
  "tracing-subscriber",
  "yellowstone-grpc-client",

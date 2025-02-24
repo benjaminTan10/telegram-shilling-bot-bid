@@ -4,20 +4,24 @@ use {
         dex::pump_fun::{Pump, get_pump_info, execute_swap, PUMP_PROGRAM_ID},
     },
     anyhow::Result,
-    futures::StreamExt,
+    futures::{StreamExt, SinkExt},
     std::time::Duration,
-    yellowstone_grpc_client::{GeyserGrpcClient, GeyserClient},
-    yellowstone_grpc_proto::prelude::{
-        subscribe_update::UpdateOneof,
-        CommitmentLevel,
-        SubscribeRequest,
-        SubscribeRequestFilterTransactions,
+    yellowstone_grpc_client::GeyserGrpcClient,
+    yellowstone_grpc_proto::{
+        prelude::{
+            subscribe_update::UpdateOneof,
+            CommitmentLevel,
+            SubscribeRequest,
+            SubscribeRequestFilterTransactions,
+        },
+        geyser::geyser_client::GeyserClient,
     },
     base64::Engine as _,
     bs58,
     chrono::Utc,
     solana_sdk::signature::Signer,
     tonic::transport::Channel,
+    tonic_health::proto::health_client::HealthClient,
 };
 
 const TARGET_WALLET: &str = "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc";
@@ -34,12 +38,12 @@ pub async fn monitor_transactions_grpc(
         .await?;
 
     // Create gRPC client with health check client
-    let health_client = tonic_health::proto::health_client::HealthClient::new(channel.clone());
+    let health_client = HealthClient::new(channel.clone());
     let geyser_client = GeyserClient::new(channel);
     let mut client = GeyserGrpcClient::new(health_client, geyser_client);
 
-    // Add auth token
-    client.set_token(std::env::var("RPC_TOKEN")?);
+    // Add auth token as metadata
+    client.add_header("x-token", std::env::var("RPC_TOKEN")?)?;
 
     logger.info(format!(
         "\n[INIT] => [GRPC MONITOR ENVIRONMENT]: 
@@ -76,14 +80,21 @@ pub async fn monitor_transactions_grpc(
         match message {
             Ok(msg) => {
                 if let Some(UpdateOneof::Transaction(tx)) = msg.update_oneof {
+                    // Get signature from transaction data
+                    let signature = if let Some(tx_data) = &tx.transaction {
+                        bs58::encode(&tx_data.signatures[0]).into_string()
+                    } else {
+                        continue;
+                    };
+
                     logger.info(format!(
                         "\n[NEW TRANSACTION] => Time: {}, Signature: {}", 
                         Utc::now(),
-                        bs58::encode(&tx.signature).into_string()
+                        signature
                     ));
 
                     // Process transaction logs
-                    if let Some(logs) = tx.log_messages {
+                    if let Some(logs) = tx.transaction.and_then(|t| t.message_logs) {
                         if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
                             logger.success("Found PumpFun transaction!".to_string());
 
