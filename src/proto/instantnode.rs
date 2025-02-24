@@ -2,7 +2,7 @@ use {
     tonic::{transport::Channel, Request, Response, Status},
     futures_util::Stream,
     anyhow::Result,
-    std::pin::Pin,
+    std::{pin::Pin, collections::HashMap},
     async_stream::stream,
 };
 
@@ -14,9 +14,35 @@ pub struct InstantNodeClient {
 
 #[derive(Debug)]
 pub struct SubscribeRequest {
-    pub accounts: Vec<String>,
-    pub include_transactions: bool,
-    pub include_accounts: bool,
+    pub accounts: HashMap<String, SubscribeRequestFilterAccounts>,
+    pub slots: HashMap<String, SubscribeRequestFilterSlots>,
+    pub transactions: HashMap<String, SubscribeRequestFilterTransactions>,
+    pub commitment: Option<CommitmentLevel>,
+}
+
+#[derive(Debug)]
+pub struct SubscribeRequestFilterAccounts {
+    pub account: Vec<String>,
+    pub owner: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct SubscribeRequestFilterSlots {
+    pub filter_by_commitment: Option<bool>,
+}
+
+#[derive(Debug)]
+pub struct SubscribeRequestFilterTransactions {
+    pub vote: Option<bool>,
+    pub failed: Option<bool>,
+    pub account_include: Vec<String>,
+}
+
+#[derive(Debug)]
+pub enum CommitmentLevel {
+    Processed = 0,
+    Confirmed = 1,
+    Finalized = 2,
 }
 
 #[derive(Debug)]
@@ -36,18 +62,17 @@ impl InstantNodeClient {
 
     pub async fn subscribe_transactions(
         &mut self,
-        request: Request<SubscribeRequest>,
+        mut request: Request<SubscribeRequest>,
     ) -> Result<Response<Pin<Box<dyn Stream<Item = Result<TransactionUpdate, Status>> + Send + 'static>>>> {
-        // Create subscription URL
-        let subscription_url = format!("{}/subscribe_transactions", self.endpoint);
-        
-        // Set up subscription parameters
-        let request = tonic::Request::new(request.into_inner());
+        // Add authentication header
+        request.metadata_mut().insert(
+            "x-token",
+            tonic::metadata::MetadataValue::from_str(&std::env::var("RPC_TOKEN")?)?
+        );
         
         // Create streaming response
         let stream = Box::pin(stream! {
             loop {
-                // Make gRPC call to get next transaction
                 match self.get_next_transaction().await {
                     Ok(update) => yield Ok(update),
                     Err(e) => {
