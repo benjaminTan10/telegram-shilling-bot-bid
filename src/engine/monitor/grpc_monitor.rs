@@ -2,7 +2,7 @@ use {
     crate::{
         common::{logger::Logger, utils::AppState},
         dex::pump_fun::{Pump, get_pump_info, execute_swap, PUMP_PROGRAM_ID},
-        proto::{InstantNodeClient, SubscribeRequest},
+        proto::{InstantNodeClient, SubscribeRequest, SubscribeRequestFilterAccounts, CommitmentLevel},
     },
     anyhow::Result,
     tokio_stream::StreamExt,
@@ -10,6 +10,9 @@ use {
     std::time::Duration,
     solana_sdk::signature::Signer,
     bs58,
+    base64_engine::{engine::general_purpose::STANDARD, Engine as _},
+    chrono::Utc,
+    std::collections::HashMap,
 };
 
 const TARGET_WALLET: &str = "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc";
@@ -35,16 +38,27 @@ pub async fn monitor_transactions_grpc(
         state.wallet.pubkey(),
     ));
 
-    // Create InstantNode client
-    let mut client = InstantNodeClient::new(channel);
-
-    // Subscribe to transaction updates
-    let request = Request::new(SubscribeRequest {
-        accounts: vec![TARGET_WALLET.to_string()],
-        include_transactions: true,
-        include_accounts: true,
+    // Create subscription request
+    let mut accounts_filter = HashMap::new();
+    accounts_filter.insert("pump_fun".to_string(), SubscribeRequestFilterAccounts {
+        account: vec![TARGET_WALLET.to_string()],
+        owner: vec![],
     });
 
+    let request = Request::new(SubscribeRequest {
+        accounts: accounts_filter,
+        slots: HashMap::new(),
+        transactions: HashMap::new(),
+        commitment: Some(CommitmentLevel::Confirmed),
+    });
+
+    // Create InstantNode client with correct endpoint
+    let mut client = InstantNodeClient::new(
+        channel,
+        "solana-grpc-geyser.instantnodes.io:443".to_string(),
+    );
+
+    // Subscribe to transaction updates
     let mut stream = client
         .subscribe_transactions(request)
         .await?
@@ -101,7 +115,7 @@ fn extract_transaction_info_from_logs(logs: &[String]) -> Result<(String, bool)>
     for log in logs {
         if log.contains(PUMP_PROGRAM_ID) {
             if let Some(program_data) = log.strip_prefix("Program data: ") {
-                if let Ok(decoded) = base64::decode(program_data) {
+                if let Ok(decoded) = STANDARD.decode(program_data) {
                     // First 8 bytes are instruction discriminator
                     if decoded.len() >= 8 {
                         let discriminator = &decoded[0..8];

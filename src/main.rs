@@ -10,6 +10,7 @@ use {
     anyhow::Result,
     solana_sdk::signature::Signer,
     std::sync::Arc,
+    tonic::transport::Channel,
 };
 
 mod common;
@@ -45,6 +46,11 @@ async fn main() -> Result<()> {
     
     logger.success("Bot initialization complete".to_string());
     logger.info("Starting gRPC transaction monitor...".to_string());
+
+    // Create gRPC channel
+    let channel = Channel::from_shared(grpc_url.clone())?
+        .connect()
+        .await?;
 
     // Start gRPC monitoring
     monitor_transactions_grpc(&grpc_url, state).await?;

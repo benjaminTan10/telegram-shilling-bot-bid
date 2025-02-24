@@ -22,6 +22,7 @@ use {
     base64,
     bs58,
     futures_util::stream::StreamExt,
+    solana_transaction_status::option_serializer::OptionSerializer,
 };
 
 const RETRY_DELAY: u64 = 5; // seconds
@@ -82,37 +83,44 @@ pub async fn monitor_wallet(
 
     // Process notifications in real-time
     while let Some(notification) = notifications.next().await {
-        let response = notification?;  // Convert Result to Response
-        logger.info(format!(
-            "\n[NEW ACCOUNT UPDATE] => Time: {}", 
-            Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
-        ));
+        match notification {
+            Ok(response) => {
+                logger.info(format!(
+                    "\n[NEW ACCOUNT UPDATE] => Time: {}", 
+                    Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
+                ));
 
-        // Get recent transactions since the update
-        match state.rpc_client.get_signatures_for_address(&target_wallet) {
-            Ok(signatures) => {
-                for sig in signatures.iter().take(5) {
-                    if sig.err.is_none() {
-                        let signature = Signature::from_str(&sig.signature)?;
-                        
-                        if let Ok(tx_response) = state.rpc_client.get_transaction_with_config(
-                            &signature,
-                            RpcTransactionConfig {
-                                encoding: Some(UiTransactionEncoding::Json),
-                                commitment: Some(CommitmentConfig::confirmed()),
-                                max_supported_transaction_version: Some(0),
-                            },
-                        ) {
-                            // Process the transaction
-                            if let Err(e) = process_transaction(&state, &tx_response.transaction).await {
-                                logger.error(format!("Error processing transaction: {}", e));
+                // Get recent transactions since the update
+                match state.rpc_client.get_signatures_for_address(&target_wallet) {
+                    Ok(signatures) => {
+                        for sig in signatures.iter().take(5) {
+                            if sig.err.is_none() {
+                                let signature = Signature::from_str(&sig.signature)?;
+                                
+                                if let Ok(tx_response) = state.rpc_client.get_transaction_with_config(
+                                    &signature,
+                                    RpcTransactionConfig {
+                                        encoding: Some(UiTransactionEncoding::Json),
+                                        commitment: Some(CommitmentConfig::confirmed()),
+                                        max_supported_transaction_version: Some(0),
+                                    },
+                                ) {
+                                    // Process the transaction
+                                    if let Err(e) = process_transaction(&state, &tx_response.transaction).await {
+                                        logger.error(format!("Error processing transaction: {}", e));
+                                    }
+                                }
                             }
                         }
+                    }
+                    Err(e) => {
+                        logger.error(format!("Error getting signatures: {}", e));
                     }
                 }
             }
             Err(e) => {
-                logger.error(format!("Error getting signatures: {}", e));
+                logger.error(format!("WebSocket error: {}", e));
+                tokio::time::sleep(Duration::from_secs(RETRY_DELAY)).await;
             }
         }
     }
