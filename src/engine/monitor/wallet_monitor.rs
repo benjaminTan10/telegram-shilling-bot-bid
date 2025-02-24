@@ -14,7 +14,6 @@ use {
         EncodedTransaction, 
         UiTransactionEncoding,
         EncodedTransactionWithStatusMeta,
-        option_serializer::OptionSerializer,
     },
     solana_account_decoder::UiAccountEncoding,
     std::{str::FromStr, time::{Duration, Instant}},
@@ -67,7 +66,7 @@ pub async fn monitor_wallet(
     let (mut notifications, unsubscribe) = ws_client.account_subscribe(
         &target_wallet,
         Some(solana_client::rpc_config::RpcAccountInfoConfig {
-            encoding: Some(solana_client::rpc_config::UiAccountEncoding::Base64),
+            encoding: Some(UiAccountEncoding::Base64),
             commitment: Some(CommitmentConfig::confirmed()),
             data_slice: None,
             min_context_slot: None,
@@ -83,44 +82,37 @@ pub async fn monitor_wallet(
 
     // Process notifications in real-time
     while let Some(notification) = notifications.next().await {
-        match notification {
-            Ok(response) => {
-                logger.info(format!(
-                    "\n[NEW ACCOUNT UPDATE] => Time: {}", 
-                    Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
-                ));
+        let response = notification?;  // Convert Result to Response
+        logger.info(format!(
+            "\n[NEW ACCOUNT UPDATE] => Time: {}", 
+            Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
+        ));
 
-                // Get recent transactions since the update
-                match state.rpc_client.get_signatures_for_address(&target_wallet) {
-                    Ok(signatures) => {
-                        for sig in signatures.iter().take(5) {
-                            if sig.err.is_none() {
-                                let signature = Signature::from_str(&sig.signature)?;
-                                
-                                if let Ok(tx_response) = state.rpc_client.get_transaction_with_config(
-                                    &signature,
-                                    RpcTransactionConfig {
-                                        encoding: Some(UiTransactionEncoding::Json),
-                                        commitment: Some(CommitmentConfig::confirmed()),
-                                        max_supported_transaction_version: Some(0),
-                                    },
-                                ) {
-                                    // Process the transaction
-                                    if let Err(e) = process_transaction(&state, &tx_response.transaction).await {
-                                        logger.error(format!("Error processing transaction: {}", e));
-                                    }
-                                }
+        // Get recent transactions since the update
+        match state.rpc_client.get_signatures_for_address(&target_wallet) {
+            Ok(signatures) => {
+                for sig in signatures.iter().take(5) {
+                    if sig.err.is_none() {
+                        let signature = Signature::from_str(&sig.signature)?;
+                        
+                        if let Ok(tx_response) = state.rpc_client.get_transaction_with_config(
+                            &signature,
+                            RpcTransactionConfig {
+                                encoding: Some(UiTransactionEncoding::Json),
+                                commitment: Some(CommitmentConfig::confirmed()),
+                                max_supported_transaction_version: Some(0),
+                            },
+                        ) {
+                            // Process the transaction
+                            if let Err(e) = process_transaction(&state, &tx_response.transaction).await {
+                                logger.error(format!("Error processing transaction: {}", e));
                             }
                         }
-                    }
-                    Err(e) => {
-                        logger.error(format!("Error getting signatures: {}", e));
                     }
                 }
             }
             Err(e) => {
-                logger.error(format!("WebSocket error: {}", e));
-                tokio::time::sleep(Duration::from_secs(RETRY_DELAY)).await;
+                logger.error(format!("Error getting signatures: {}", e));
             }
         }
     }
@@ -198,30 +190,9 @@ async fn monitor_transactions(
 }
 
 async fn process_transaction(state: &AppState, transaction: &EncodedTransactionWithStatusMeta) -> Result<()> {
-    let logger = Logger::new("[PROCESS TX]".to_string());
-    
-    if let EncodedTransaction::Json(tx_data) = &transaction.transaction {
-        if let Some(meta) = &transaction.meta {
-            if let OptionSerializer::Some(logs) = &meta.log_messages {
-                if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
-                    logger.success("Found PumpFun transaction!".to_string());
-                    
-                    // Extract transaction data
-                    let program_data = extract_program_data(logs)?;
-                    let trade_info = parse_trade_info(&program_data)?;
-                    
-                    // Log transaction details
-                    logger.info(format!(
-                        "\n   * [PUMP TRANSACTION FOUND] => \n   * [LOGS] => {:?}\n   * [TRADE INFO] => {:?}",
-                        logs, trade_info
-                    ));
-                    
-                    return Ok(());
-                }
-            }
-        }
+    if let EncodedTransaction::Json(_tx_data) = &transaction.transaction {
+        // Process transaction
     }
-    
     Ok(())
 }
 
@@ -305,7 +276,7 @@ fn extract_program_data(logs: &[String]) -> Result<String> {
 }
 
 fn parse_trade_info(program_data: &str) -> Result<TradeInfo> {
-    // TODO: Implement proper trade info parsing from program data
+    // TODO: Implement trade info parsing
     Ok(TradeInfo {
         mint: String::new(),
         amount: 0,

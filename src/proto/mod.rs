@@ -1,48 +1,14 @@
-use {
-    tonic::{transport::Channel, Request, Response},
-    futures_util::Stream,
-    anyhow::Result,
+mod instantnode;
+
+pub use instantnode::{
+    InstantNodeClient,
+    SubscribeRequest,
+    TransactionUpdate,
 };
-use solana_sdk::pubkey::Pubkey;
 
-#[derive(Debug)]
-pub struct SubscribeRequest {
-    pub accounts: Vec<String>,
-    pub transaction_details: bool,
-    pub show_events: bool,
-}
+// Re-export common types
+pub use tonic::{transport::Channel, Request, Response};
+pub use futures_util::Stream;
+pub use anyhow::Result;
 
-#[derive(Debug)]
-pub struct TransactionUpdate {
-    pub status: TransactionStatus,
-    pub instructions: Vec<InstructionInfo>,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum TransactionStatus {
-    Confirmed,
-    Failed,
-    Pending,
-}
-
-#[derive(Debug)]
-pub struct InstructionInfo {
-    pub program_id: String,
-    pub data: Vec<u8>,
-}
-
-pub struct GeyserClient {
-    channel: Channel,
-}
-
-impl GeyserClient {
-    pub fn new(channel: Channel) -> Self {
-        Self { channel }
-    }
-
-    pub async fn subscribe(&mut self, request: Request<SubscribeRequest>) 
-        -> Result<Response<impl Stream<Item = Result<TransactionUpdate, tonic::Status>>>> {
-        // TODO: Implement actual gRPC subscription
-        unimplemented!("gRPC subscription not yet implemented")
-    }
-} 
+// Remove duplicate type definitions since they're now in instantnode.rs 
