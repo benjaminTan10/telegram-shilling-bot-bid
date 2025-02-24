@@ -7,7 +7,7 @@ use {
     std::str::FromStr,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InstantNodeClient {
     endpoint: String,
     channel: Channel,
@@ -68,7 +68,7 @@ impl InstantNodeClient {
         // Add authentication header
         request.metadata_mut().insert(
             "x-token",
-            tonic::metadata::MetadataValue::from_static(&std::env::var("RPC_TOKEN")?)
+            tonic::metadata::MetadataValue::from_static(std::env::var("RPC_TOKEN")?.as_str()),
         );
         
         // Create streaming response
