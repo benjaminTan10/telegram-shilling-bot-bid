@@ -2,13 +2,12 @@ use {
     crate::{
         common::{logger::Logger, utils::AppState},
         dex::pump_fun::{Pump, get_pump_info, execute_swap, PUMP_PROGRAM_ID},
-        proto::{GeyserClient, SubscribeRequest, TransactionStatus, TransactionUpdate},
+        proto::{InstantNodeClient, SubscribeRequest},
     },
-    anyhow::{anyhow, Result},
+    anyhow::Result,
     tokio_stream::StreamExt,
     tonic::{transport::Channel, Request},
     std::time::Duration,
-    solana_sdk::pubkey::Pubkey,
     solana_sdk::signature::Signer,
     bs58,
 };
@@ -36,18 +35,18 @@ pub async fn monitor_transactions_grpc(
         state.wallet.pubkey(),
     ));
 
-    // Create gRPC client
-    let mut client = GeyserClient::new(channel);
+    // Create InstantNode client
+    let mut client = InstantNodeClient::new(channel);
 
     // Subscribe to transaction updates
     let request = Request::new(SubscribeRequest {
         accounts: vec![TARGET_WALLET.to_string()],
-        transaction_details: true,
-        show_events: true,
+        include_transactions: true,
+        include_accounts: true,
     });
 
     let mut stream = client
-        .subscribe(request)
+        .subscribe_transactions(request)
         .await?
         .into_inner();
 
@@ -56,19 +55,40 @@ pub async fn monitor_transactions_grpc(
         match update {
             Ok(tx_update) => {
                 logger.info(format!(
-                    "\n[NEW TRANSACTION] => Time: {}", 
-                    chrono::Utc::now()
+                    "\n[NEW TRANSACTION] => Time: {}, Signature: {}", 
+                    chrono::Utc::now(),
+                    tx_update.signature
                 ));
 
-                // Process transaction
-                if let Err(e) = process_transaction_update(&state, tx_update).await {
-                    logger.error(format!("Error processing transaction: {}", e));
+                // Process transaction logs
+                if let Some(logs) = tx_update.logs {
+                    if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
+                        logger.success("Found PumpFun transaction!".to_string());
+
+                        // Extract transaction data and execute copy trade
+                        if let Ok((mint, is_buy)) = extract_transaction_info_from_logs(&logs) {
+                            // Create Pump instance and execute swap
+                            let pump = Pump::new(
+                                state.rpc_nonblocking_client.clone(),
+                                state.wallet.clone(),
+                            );
+
+                            if let Ok(pump_info) = get_pump_info(state.rpc_client.clone(), &mint).await {
+                                match execute_swap(&pump, &mint, is_buy, &pump_info).await {
+                                    Ok(signature) => {
+                                        logger.success(format!("Successfully copied trade: {}", signature));
+                                    }
+                                    Err(e) => {
+                                        logger.error(format!("Failed to copy trade: {}", e));
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Err(e) => {
                 logger.error(format!("Stream error: {}", e));
-                
-                // Reconnect after error
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
@@ -77,66 +97,28 @@ pub async fn monitor_transactions_grpc(
     Ok(())
 }
 
-async fn process_transaction_update(
-    state: &AppState,
-    update: TransactionUpdate,
-) -> Result<()> {
-    let logger = Logger::new("[PROCESS TX]".to_string());
+fn extract_transaction_info_from_logs(logs: &[String]) -> Result<(String, bool)> {
+    for log in logs {
+        if log.contains(PUMP_PROGRAM_ID) {
+            if let Some(program_data) = log.strip_prefix("Program data: ") {
+                if let Ok(decoded) = base64::decode(program_data) {
+                    // First 8 bytes are instruction discriminator
+                    if decoded.len() >= 8 {
+                        let discriminator = &decoded[0..8];
+                        let discriminator_value = u64::from_le_bytes(discriminator.try_into().unwrap());
+                        let is_buy = discriminator_value == 16927863322537952870; // PUMP_BUY_METHOD
 
-    // Check if transaction is successful
-    if update.status != TransactionStatus::Confirmed {
-        return Ok(());
-    }
-
-    // Check if transaction involves PumpFun program
-    if !update.instructions.iter().any(|ix| ix.program_id == PUMP_PROGRAM_ID) {
-        return Ok(());
-    }
-
-    logger.success("Found PumpFun transaction!".to_string());
-
-    // Extract transaction data and execute copy trade
-    let (mint, is_buy) = extract_transaction_info_grpc(&update)?;
-    
-    // Create Pump instance and execute swap
-    let pump = Pump::new(
-        state.rpc_nonblocking_client.clone(),
-        state.wallet.clone(),
-    );
-
-    if let Ok(pump_info) = get_pump_info(state.rpc_client.clone(), &mint).await {
-        match execute_swap(&pump, &mint, is_buy, &pump_info).await {
-            Ok(signature) => {
-                logger.success(format!("Successfully copied trade: {}", signature));
-            }
-            Err(e) => {
-                logger.error(format!("Failed to copy trade: {}", e));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn extract_transaction_info_grpc(update: &TransactionUpdate) -> Result<(String, bool)> {
-    // Extract mint address and trade direction from transaction data
-    for instruction in &update.instructions {
-        if instruction.program_id == PUMP_PROGRAM_ID {
-            // Parse instruction data to determine if it's a buy or sell
-            let is_buy = instruction.data.len() >= 8 && {
-                let discriminator = &instruction.data[0..8];
-                let discriminator_value = u64::from_le_bytes(discriminator.try_into().unwrap());
-                discriminator_value == 16927863322537952870 // PUMP_BUY_METHOD
-            };
-
-            // Extract mint address from instruction data
-            if instruction.data.len() >= 40 {
-                let mint_bytes = &instruction.data[8..40];
-                let mint_address = bs58::encode(mint_bytes).into_string();
-                return Ok((mint_address, is_buy));
+                        // Extract mint address from instruction data
+                        if decoded.len() >= 40 {
+                            let mint_bytes = &decoded[8..40];
+                            let mint_address = bs58::encode(mint_bytes).into_string();
+                            return Ok((mint_address, is_buy));
+                        }
+                    }
+                }
             }
         }
     }
     
-    Err(anyhow::anyhow!("No valid PumpFun instruction found"))
+    Err(anyhow::anyhow!("No valid PumpFun instruction found in logs"))
 } 

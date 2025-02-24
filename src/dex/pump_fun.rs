@@ -274,16 +274,27 @@ pub async fn execute_swap(pump: &Pump, mint: &str, is_buy: bool, pump_info: &Pum
     
     // Calculate copy amount (50% of virtual reserves)
     let amount = if is_buy {
-        (pump_info.virtual_sol_reserves as f64 * 0.5) as u64
+        let copy_amount = (pump_info.virtual_sol_reserves as f64 * 0.5) as u64;
+        logger.info(format!("Executing buy for {} SOL", copy_amount as f64 / 1_000_000_000.0));
+        copy_amount
     } else {
         let token_balance = pump.get_token_balance(mint).await?;
-        (token_balance as f64 * 0.5) as u64
+        let copy_amount = (token_balance as f64 * 0.5) as u64;
+        logger.info(format!("Executing sell for {} tokens", copy_amount));
+        copy_amount
     };
 
     // Execute the swap
-    if is_buy {
+    let result = if is_buy {
         pump.buy(mint, amount).await
     } else {
         pump.sell(mint, amount).await
+    };
+
+    match &result {
+        Ok(sig) => logger.success(format!("Swap executed successfully: {}", sig)),
+        Err(e) => logger.error(format!("Swap failed: {}", e)),
     }
+
+    result
 } 
