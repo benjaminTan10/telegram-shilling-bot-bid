@@ -4,7 +4,6 @@ use {
         dex::pump_fun::{Pump, get_pump_info, execute_swap, PUMP_PROGRAM_ID},
     },
     anyhow::Result,
-    futures::StreamExt,
     std::time::Duration,
     yellowstone_grpc_client::GeyserGrpcClient,
     yellowstone_grpc_proto::{
