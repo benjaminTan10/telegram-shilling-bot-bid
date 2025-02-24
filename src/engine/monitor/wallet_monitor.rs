@@ -23,6 +23,7 @@ use {
     bs58,
     futures_util::stream::StreamExt,
     solana_transaction_status::option_serializer::OptionSerializer,
+    tonic::Response,
 };
 
 const RETRY_DELAY: u64 = 5; // seconds
@@ -197,7 +198,7 @@ async fn monitor_transactions(
     Ok((tx_count, latest_signature))
 }
 
-async fn process_transaction(state: &AppState, transaction: &EncodedTransactionWithStatusMeta) -> Result<()> {
+async fn process_transaction(_state: &AppState, transaction: &EncodedTransactionWithStatusMeta) -> Result<()> {
     if let EncodedTransaction::Json(_tx_data) = &transaction.transaction {
         // Process transaction
     }

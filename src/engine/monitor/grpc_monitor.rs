@@ -4,7 +4,7 @@ use {
         dex::pump_fun::{Pump, get_pump_info, execute_swap, PUMP_PROGRAM_ID},
     },
     anyhow::Result,
-    futures::{StreamExt, SinkExt},
+    futures::StreamExt,
     std::time::Duration,
     yellowstone_grpc_client::GeyserGrpcClient,
     yellowstone_grpc_proto::{
@@ -23,6 +23,7 @@ use {
     tonic::{
         transport::{Channel, ClientTlsConfig},
         metadata::MetadataValue,
+        Response,
     },
     tonic_health::proto::health_client::HealthClient,
 };
@@ -45,9 +46,7 @@ pub async fn monitor_transactions_grpc(
     let geyser_client = GeyserClient::new(channel);
 
     // Create gRPC client
-    let mut client = GeyserGrpcClient::new_with_interceptor(health_client, geyser_client, |mut req| {
-        Ok(req)
-    });
+    let mut client = GeyserGrpcClient::new(health_client, geyser_client);
 
     // Add auth token
     let token = MetadataValue::try_from(std::env::var("RPC_TOKEN")?)?;
@@ -102,7 +101,7 @@ pub async fn monitor_transactions_grpc(
                     ));
 
                     // Process transaction logs
-                    if let Some(logs) = tx.transaction.and_then(|t| t.message_logs) {
+                    if let Some(logs) = tx.transaction.and_then(|t| t.meta.logs) {
                         if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
                             logger.success("Found PumpFun transaction!".to_string());
 
