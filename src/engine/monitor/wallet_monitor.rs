@@ -24,6 +24,7 @@ use {
     futures_util::stream::StreamExt,
     solana_transaction_status::option_serializer::OptionSerializer,
     tonic::Response,
+    solana_client::rpc_response::Response,
 };
 
 const RETRY_DELAY: u64 = 5; // seconds
