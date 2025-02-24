@@ -23,6 +23,7 @@ use {
         transport::{Channel, ClientTlsConfig},
         metadata::MetadataValue,
         Response,
+        Request,
     },
     tonic_health::pb::health_client::HealthClient,
     futures_util::SinkExt,

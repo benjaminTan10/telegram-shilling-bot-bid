@@ -17,9 +17,11 @@ use {
         EncodedTransaction, 
         UiTransactionEncoding,
         EncodedTransactionWithStatusMeta,
+    },
+    solana_account_decoder::{
+        UiAccountEncoding,
         UiAccount,
     },
-    solana_account_decoder::UiAccountEncoding,
     std::{str::FromStr, time::{Duration, Instant}},
     chrono::Utc,
     base64,
