@@ -267,4 +267,8 @@ struct BuyInstruction {
 #[derive(BorshSerialize, BorshDeserialize)]
 struct SellInstruction {
     amount: u64,
+}
+
+pub async fn execute_swap(pump: &Pump, mint: &str, is_buy: bool, pump_info: &PumpInfo) -> Result<String> {
+    // ... existing implementation ...
 } 

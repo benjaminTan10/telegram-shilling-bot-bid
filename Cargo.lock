@@ -3231,6 +3231,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "futures",
+ "futures-util",
  "prost",
  "pumpfun",
  "scopeguard",

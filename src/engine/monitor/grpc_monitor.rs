@@ -1,7 +1,7 @@
 use {
     crate::{
         common::{logger::Logger, utils::AppState},
-        dex::pump_fun::{Pump, get_pump_info, PUMP_PROGRAM_ID},
+        dex::pump_fun::{Pump, get_pump_info, execute_swap, PUMP_PROGRAM_ID},
         proto::{GeyserClient, SubscribeRequest, TransactionStatus, TransactionUpdate},
     },
     anyhow::{anyhow, Result},
@@ -9,6 +9,8 @@ use {
     tonic::{transport::Channel, Request},
     std::time::Duration,
     solana_sdk::pubkey::Pubkey,
+    solana_sdk::signature::Signer,
+    bs58,
 };
 
 const TARGET_WALLET: &str = "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc";
@@ -118,6 +120,23 @@ async fn process_transaction_update(
 
 fn extract_transaction_info_grpc(update: &TransactionUpdate) -> Result<(String, bool)> {
     // Extract mint address and trade direction from transaction data
-    // Implementation will depend on exact gRPC message format
-    // ...
+    for instruction in &update.instructions {
+        if instruction.program_id == PUMP_PROGRAM_ID {
+            // Parse instruction data to determine if it's a buy or sell
+            let is_buy = instruction.data.len() >= 8 && {
+                let discriminator = &instruction.data[0..8];
+                let discriminator_value = u64::from_le_bytes(discriminator.try_into().unwrap());
+                discriminator_value == 16927863322537952870 // PUMP_BUY_METHOD
+            };
+
+            // Extract mint address from instruction data
+            if instruction.data.len() >= 40 {
+                let mint_bytes = &instruction.data[8..40];
+                let mint_address = bs58::encode(mint_bytes).into_string();
+                return Ok((mint_address, is_buy));
+            }
+        }
+    }
+    
+    Err(anyhow::anyhow!("No valid PumpFun instruction found"))
 } 
