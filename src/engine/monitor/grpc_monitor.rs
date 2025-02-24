@@ -7,21 +7,17 @@ use {
     futures::{StreamExt, SinkExt},
     std::time::Duration,
     yellowstone_grpc_client::GeyserGrpcClient,
-    yellowstone_grpc_proto::{
-        prelude::{
-            subscribe_update::UpdateOneof,
-            CommitmentLevel,
-            SubscribeRequest,
-            SubscribeRequestFilterTransactions,
-        },
-        geyser::geyser_client::GeyserClient,
+    yellowstone_grpc_proto::prelude::{
+        subscribe_update::UpdateOneof,
+        CommitmentLevel,
+        SubscribeRequest,
+        SubscribeRequestFilterTransactions,
     },
     base64::Engine as _,
     bs58,
     chrono::Utc,
     solana_sdk::signature::Signer,
-    tonic::transport::Channel,
-    tonic_health::proto::health_client::HealthClient,
+    tonic::transport::ClientTlsConfig,
 };
 
 const TARGET_WALLET: &str = "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc";
@@ -32,18 +28,13 @@ pub async fn monitor_transactions_grpc(
 ) -> Result<()> {
     let logger = Logger::new("[GRPC-MONITOR]".to_string());
     
-    // Create gRPC channel
-    let channel = Channel::from_shared(grpc_url.to_string())?
+    // Create gRPC client with TLS config
+    let mut client = GeyserGrpcClient::builder()
+        .url(grpc_url)?
+        .token(std::env::var("RPC_TOKEN")?)?
+        .tls_config(ClientTlsConfig::new().with_native_roots())?
         .connect()
         .await?;
-
-    // Create gRPC client with health check client
-    let health_client = HealthClient::new(channel.clone());
-    let geyser_client = GeyserClient::new(channel);
-    let mut client = GeyserGrpcClient::new(health_client, geyser_client);
-
-    // Add auth token as metadata
-    client.add_header("x-token", std::env::var("RPC_TOKEN")?)?;
 
     logger.info(format!(
         "\n[INIT] => [GRPC MONITOR ENVIRONMENT]: 
@@ -82,7 +73,7 @@ pub async fn monitor_transactions_grpc(
                 if let Some(UpdateOneof::Transaction(tx)) = msg.update_oneof {
                     // Get signature from transaction data
                     let signature = if let Some(tx_data) = &tx.transaction {
-                        bs58::encode(&tx_data.signatures[0]).into_string()
+                        tx_data.signature.clone()
                     } else {
                         continue;
                     };
@@ -90,11 +81,11 @@ pub async fn monitor_transactions_grpc(
                     logger.info(format!(
                         "\n[NEW TRANSACTION] => Time: {}, Signature: {}", 
                         Utc::now(),
-                        signature
+                        bs58::encode(&signature).into_string()
                     ));
 
                     // Process transaction logs
-                    if let Some(logs) = tx.transaction.and_then(|t| t.message_logs) {
+                    if let Some(logs) = tx.meta.and_then(|m| m.log_messages) {
                         if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
                             logger.success("Found PumpFun transaction!".to_string());
 
