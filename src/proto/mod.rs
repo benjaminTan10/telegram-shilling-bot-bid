@@ -35,4 +35,10 @@ impl GeyserClient {
     pub fn new(channel: Channel) -> Self {
         Self { channel }
     }
+
+    pub async fn subscribe(&mut self, request: Request<SubscribeRequest>) 
+        -> Result<tonic::Response<impl futures_util::Stream<Item = Result<TransactionUpdate, tonic::Status>>>> {
+        // TODO: Implement actual gRPC subscription
+        unimplemented!("gRPC subscription not yet implemented")
+    }
 } 

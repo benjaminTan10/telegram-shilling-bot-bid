@@ -1,7 +1,7 @@
 use {
     crate::{
         common::{logger::Logger, utils::AppState},
-        dex::pump_fun::{Pump, PumpInfo, get_pump_info},
+        dex::pump_fun::{Pump, PumpInfo, get_pump_info, execute_swap},
     },
     anyhow::{anyhow, Result},
     solana_client::rpc_config::RpcTransactionConfig,
