@@ -4,10 +4,7 @@ use {
         dex::pump_fun::{Pump, PumpInfo, get_pump_info},
     },
     anyhow::{anyhow, Result},
-    solana_client::{
-        rpc_config::RpcTransactionConfig,
-        rpc_response::Response as RpcResponse,
-    },
+    solana_client::rpc_config::RpcTransactionConfig,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         pubkey::Pubkey,
@@ -17,18 +14,13 @@ use {
         EncodedTransaction, 
         UiTransactionEncoding,
         EncodedTransactionWithStatusMeta,
-    },
-    solana_account_decoder::{
-        UiAccountEncoding,
-        UiAccount,
+        option_serializer::OptionSerializer,
     },
     std::{str::FromStr, time::{Duration, Instant}},
+    tokio::time,
     chrono::Utc,
     base64,
     bs58,
-    futures_util::stream::StreamExt,
-    solana_transaction_status::option_serializer::OptionSerializer,
-    tokio::time,
 };
 
 const RETRY_DELAY: u64 = 5; // seconds
@@ -54,7 +46,7 @@ pub async fn monitor_wallet(
             
          * [Slippage]: {}%, * [Use Jito]: {},
             
-         * [Monitor Mode]: Real-time WebSocket streaming
+         * [Monitor Interval]: {}s, * [Retry Delay]: {}s
          ",
         ws_url,
         target_wallet.to_string(),
@@ -62,72 +54,59 @@ pub async fn monitor_wallet(
         state.rpc_client.get_balance(&state.wallet.pubkey())? as f64 / 1_000_000_000.0,
         slippage,
         use_jito,
+        MONITOR_INTERVAL,
+        RETRY_DELAY,
     ));
 
     logger.info("[STARTED. MONITORING]...".to_string());
+    
+    let mut interval = time::interval(Duration::from_secs(MONITOR_INTERVAL));
+    let mut last_signature = None;
 
-    // Create WebSocket client
-    let ws_client = solana_client::nonblocking::pubsub_client::PubsubClient::new(ws_url).await?;
+    loop {
+        interval.tick().await;
+        let start_time = Instant::now();
+        
+        // Log monitoring cycle
+        logger.info(format!(
+            "\n[MONITORING CYCLE] => Time: {}", 
+            Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
+        ));
 
-    // Subscribe to account notifications for the target wallet
-    let (mut notifications, unsubscribe) = ws_client.account_subscribe(
-        &target_wallet,
-        Some(solana_client::rpc_config::RpcAccountInfoConfig {
-            encoding: Some(UiAccountEncoding::Base64),
-            commitment: Some(CommitmentConfig::confirmed()),
-            data_slice: None,
-            min_context_slot: None,
-        }),
-    ).await?;
-
-    // Handle cleanup on drop
-    let _cleanup = scopeguard::guard(unsubscribe, |unsub| {
-        tokio::spawn(async move {
-            let _ = unsub().await;
-        });
-    });
-
-    // Process notifications in real-time
-    while let Some(notification) = notifications.next().await {
-        match notification {
-            RpcResponse { value: account_info, .. } => {
-                logger.info(format!(
-                    "\n[NEW ACCOUNT UPDATE] => Time: {}", 
-                    Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
-                ));
-
-                // Get recent transactions since the update
-                match state.rpc_client.get_signatures_for_address(&target_wallet) {
-                    Ok(signatures) => {
-                        for sig in signatures.iter().take(5) {
-                            if sig.err.is_none() {
-                                let signature = Signature::from_str(&sig.signature)?;
-                                
-                                if let Ok(tx_response) = state.rpc_client.get_transaction_with_config(
-                                    &signature,
-                                    RpcTransactionConfig {
-                                        encoding: Some(UiTransactionEncoding::Json),
-                                        commitment: Some(CommitmentConfig::confirmed()),
-                                        max_supported_transaction_version: Some(0),
-                                    },
-                                ) {
-                                    // Process the transaction
-                                    if let Err(e) = process_transaction(&state, &tx_response.transaction).await {
-                                        logger.error(format!("Error processing transaction: {}", e));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        logger.error(format!("Error getting signatures: {}", e));
-                    }
+        // Monitor transactions
+        match monitor_transactions(&state, &target_wallet, last_signature).await {
+            Ok((count, latest_sig)) => {
+                if count > 0 {
+                    logger.transaction(format!(
+                        "Found {} new transactions from target wallet", 
+                        count
+                    ));
+                    last_signature = latest_sig;
                 }
             }
+            Err(e) => {
+                logger.error(format!("Error monitoring transactions: {}", e));
+                time::sleep(Duration::from_secs(RETRY_DELAY)).await;
+            }
         }
-    }
 
-    Ok(())
+        // Monitor balances
+        if let Ok(target_balance) = state.rpc_client.get_balance(&target_wallet) {
+            if let Ok(bot_balance) = state.rpc_client.get_balance(&state.wallet.pubkey()) {
+                logger.info(format!(
+                    "[BALANCES] => Target: {} SOL, Bot: {} SOL",
+                    target_balance as f64 / 1_000_000_000.0,
+                    bot_balance as f64 / 1_000_000_000.0
+                ));
+            }
+        }
+
+        // Log cycle completion
+        logger.info(format!(
+            "[CYCLE COMPLETE] => Duration: {:?}\n",
+            start_time.elapsed()
+        ));
+    }
 }
 
 async fn monitor_transactions(
@@ -199,10 +178,31 @@ async fn monitor_transactions(
     Ok((tx_count, latest_signature))
 }
 
-async fn process_transaction(_state: &AppState, transaction: &EncodedTransactionWithStatusMeta) -> Result<()> {
-    if let EncodedTransaction::Json(_tx_data) = &transaction.transaction {
-        // Process transaction
+async fn process_transaction(state: &AppState, transaction: &EncodedTransactionWithStatusMeta) -> Result<()> {
+    let logger = Logger::new("[PROCESS TX]".to_string());
+    
+    if let EncodedTransaction::Json(tx_data) = &transaction.transaction {
+        if let Some(meta) = &transaction.meta {
+            if let OptionSerializer::Some(logs) = &meta.log_messages {
+                if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
+                    logger.success("Found PumpFun transaction!".to_string());
+                    
+                    // Extract transaction data
+                    let program_data = extract_program_data(logs)?;
+                    let trade_info = parse_trade_info(&program_data)?;
+                    
+                    // Log transaction details
+                    logger.info(format!(
+                        "\n   * [PUMP TRANSACTION FOUND] => \n   * [LOGS] => {:?}\n   * [TRADE INFO] => {:?}",
+                        logs, trade_info
+                    ));
+                    
+                    return Ok(());
+                }
+            }
+        }
     }
+    
     Ok(())
 }
 
@@ -286,7 +286,7 @@ fn extract_program_data(logs: &[String]) -> Result<String> {
 }
 
 fn parse_trade_info(program_data: &str) -> Result<TradeInfo> {
-    // TODO: Implement trade info parsing
+    // TODO: Implement proper trade info parsing from program data
     Ok(TradeInfo {
         mint: String::new(),
         amount: 0,
