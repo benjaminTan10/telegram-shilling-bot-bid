@@ -95,7 +95,7 @@ pub async fn monitor_transactions_grpc(
                 if let Some(UpdateOneof::Transaction(tx)) = msg.update_oneof {
                     if let Some(tx_data) = &tx.transaction {
                         if let Some(meta) = &tx_data.meta {
-                            if let Some(logs) = &meta.log_messages {
+                            if let Some(ref logs) = meta.log_messages {
                                 if logs.iter().any(|log| log.contains(PUMP_PROGRAM_ID)) {
                                     logger.success("Found PumpFun transaction!".to_string());
 
