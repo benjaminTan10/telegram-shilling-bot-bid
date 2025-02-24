@@ -29,12 +29,19 @@ anchor-client = "0.30.1"
 anchor-spl = "0.30.1"
 pumpfun = "3.0.1"
 scopeguard = "1.2"
-tonic = "0.10"
-tonic-health = "0.10"
-prost = "0.12"
+tonic = "0.10.2"
+tonic-health = "0.10.2"
+prost = "0.12.3"
 tokio-stream = "0.1"
 async-stream = "0.3"
-yellowstone-grpc-client = "1.14.2"
-yellowstone-grpc-proto = "1.14.2"
+yellowstone-grpc-client = "1.15.0"
+yellowstone-grpc-proto = "1.15.0"
 maplit = "1.0"
 backoff = { version = "0.4", features = ["tokio"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.48", features = [
+    "Win32_Foundation",
+    "Win32_System_WindowsProgramming",
+    "Win32_Storage_FileSystem"
+]}
