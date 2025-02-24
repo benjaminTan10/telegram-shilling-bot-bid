@@ -45,11 +45,13 @@ pub async fn monitor_transactions_grpc(
     let geyser_client = GeyserClient::new(channel);
 
     // Create gRPC client
-    let mut client = GeyserGrpcClient::new(health_client, geyser_client);
+    let mut client = GeyserGrpcClient::new_with_interceptor(health_client, geyser_client, |mut req| {
+        Ok(req)
+    });
 
     // Add auth token
     let token = MetadataValue::try_from(std::env::var("RPC_TOKEN")?)?;
-    client.add_header("x-token", token)?;
+    client.add_headers(vec![("x-token", token)])?;
 
     logger.info(format!(
         "\n[INIT] => [GRPC MONITOR ENVIRONMENT]: 
