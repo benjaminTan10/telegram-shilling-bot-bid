@@ -3353,6 +3353,7 @@ dependencies = [
  "tonic-health",
  "tracing",
  "tracing-subscriber",
+ "windows-sys 0.48.0",
  "yellowstone-grpc-client",
  "yellowstone-grpc-proto",
 ]
