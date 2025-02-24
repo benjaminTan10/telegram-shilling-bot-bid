@@ -80,3 +80,46 @@ For support and inquiries, please connect via Telegram: 📞 [Benjamin](https://
 ## License
 
 MIT License
+
+# Using Yellowstone gRPC with InstantNodes
+
+## Setup
+1. Configure environment variables in `.env`:
+```env
+RPC_GRPC=solana-grpc-geyser.instantnodes.io:443
+RPC_TOKEN=your_token_here
+```
+
+## Usage Examples
+
+### Monitor PumpFun Transactions
+```bash
+cargo run -- --endpoint $RPC_GRPC --x-token $RPC_TOKEN subscribe \
+  --transactions \
+  --transactions-vote false \
+  --transactions-failed false \
+  --transactions-account-include "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc"
+```
+
+### Monitor Account Updates
+```bash
+cargo run -- --endpoint $RPC_GRPC --x-token $RPC_TOKEN subscribe \
+  --accounts \
+  --accounts-account "o7RY6P2vQMuGSu1TrLM81weuzgDjaCRTXYRaXJwWcvc"
+```
+
+### Test Connection
+```bash
+cargo run -- --endpoint $RPC_GRPC --x-token $RPC_TOKEN ping
+```
+
+### Get Latest Blockhash
+```bash
+cargo run -- --endpoint $RPC_GRPC --x-token $RPC_TOKEN get-latest-blockhash
+```
+
+## Features
+- Real-time transaction monitoring
+- Account update tracking
+- Automatic reconnection with exponential backoff
+- Support for different commitment levels

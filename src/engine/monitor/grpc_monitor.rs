@@ -52,19 +52,19 @@ pub async fn monitor_transactions_grpc(
         commitment: Some(CommitmentLevel::Confirmed),
     });
 
-    // Create InstantNode client with correct endpoint
+    // Create InstantNode client
     let mut client = InstantNodeClient::new(
         channel,
         "solana-grpc-geyser.instantnodes.io:443".to_string(),
     );
 
-    // Subscribe to transaction updates
+    // Subscribe to updates
     let mut stream = client
         .subscribe_transactions(request)
         .await?
         .into_inner();
 
-    // Process transaction stream
+    // Process updates
     while let Some(update) = stream.next().await {
         match update {
             Ok(tx_update) => {
