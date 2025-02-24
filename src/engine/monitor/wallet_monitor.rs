@@ -46,7 +46,7 @@ pub async fn monitor_wallet(
             
          * [Slippage]: {}%, * [Use Jito]: {},
             
-         * [Monitor Interval]: {}s, * [Retry Delay]: {}s
+         * [Monitor Mode]: Real-time WebSocket streaming
          ",
         ws_url,
         target_wallet.to_string(),
@@ -54,59 +54,75 @@ pub async fn monitor_wallet(
         state.rpc_client.get_balance(&state.wallet.pubkey())? as f64 / 1_000_000_000.0,
         slippage,
         use_jito,
-        MONITOR_INTERVAL,
-        RETRY_DELAY,
     ));
 
     logger.info("[STARTED. MONITORING]...".to_string());
-    
-    let mut interval = time::interval(Duration::from_secs(MONITOR_INTERVAL));
-    let mut last_signature = None;
 
-    loop {
-        interval.tick().await;
-        let start_time = Instant::now();
-        
-        // Log monitoring cycle
-        logger.info(format!(
-            "\n[MONITORING CYCLE] => Time: {}", 
-            Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
-        ));
+    // Create WebSocket client
+    let ws_client = solana_client::nonblocking::pubsub_client::PubsubClient::new(ws_url).await?;
 
-        // Monitor transactions
-        match monitor_transactions(&state, &target_wallet, last_signature).await {
-            Ok((count, latest_sig)) => {
-                if count > 0 {
-                    logger.transaction(format!(
-                        "Found {} new transactions from target wallet", 
-                        count
-                    ));
-                    last_signature = latest_sig;
+    // Subscribe to account notifications for the target wallet
+    let (mut notifications, unsubscribe) = ws_client.account_subscribe(
+        &target_wallet,
+        Some(solana_client::rpc_config::RpcAccountInfoConfig {
+            encoding: Some(solana_client::rpc_config::UiAccountEncoding::Base64),
+            commitment: Some(CommitmentConfig::confirmed()),
+            data_slice: None,
+            min_context_slot: None,
+        }),
+    ).await?;
+
+    // Handle cleanup on drop
+    let _cleanup = scopeguard::guard(unsubscribe, |unsub| {
+        tokio::spawn(async move {
+            let _ = unsub.await;
+        });
+    });
+
+    // Process notifications in real-time
+    while let Some(notification) = notifications.next().await {
+        match notification {
+            Ok(update) => {
+                logger.info(format!(
+                    "\n[NEW ACCOUNT UPDATE] => Time: {}", 
+                    Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
+                ));
+
+                // Get recent transactions since the update
+                match state.rpc_client.get_signatures_for_address(&target_wallet) {
+                    Ok(signatures) => {
+                        for sig in signatures.iter().take(5) {
+                            if sig.err.is_none() {
+                                let signature = Signature::from_str(&sig.signature)?;
+                                
+                                if let Ok(tx_response) = state.rpc_client.get_transaction_with_config(
+                                    &signature,
+                                    RpcTransactionConfig {
+                                        encoding: Some(UiTransactionEncoding::Json),
+                                        commitment: Some(CommitmentConfig::confirmed()),
+                                        max_supported_transaction_version: Some(0),
+                                    },
+                                ) {
+                                    // Process the transaction
+                                    if let Err(e) = process_transaction(&state, &tx_response.transaction).await {
+                                        logger.error(format!("Error processing transaction: {}", e));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        logger.error(format!("Error getting signatures: {}", e));
+                    }
                 }
             }
             Err(e) => {
-                logger.error(format!("Error monitoring transactions: {}", e));
-                time::sleep(Duration::from_secs(RETRY_DELAY)).await;
+                logger.error(format!("WebSocket error: {}", e));
             }
         }
-
-        // Monitor balances
-        if let Ok(target_balance) = state.rpc_client.get_balance(&target_wallet) {
-            if let Ok(bot_balance) = state.rpc_client.get_balance(&state.wallet.pubkey()) {
-                logger.info(format!(
-                    "[BALANCES] => Target: {} SOL, Bot: {} SOL",
-                    target_balance as f64 / 1_000_000_000.0,
-                    bot_balance as f64 / 1_000_000_000.0
-                ));
-            }
-        }
-
-        // Log cycle completion
-        logger.info(format!(
-            "[CYCLE COMPLETE] => Duration: {:?}\n",
-            start_time.elapsed()
-        ));
     }
+
+    Ok(())
 }
 
 async fn monitor_transactions(
