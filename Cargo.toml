@@ -33,7 +33,7 @@ tonic = "0.10"
 prost = "0.12"
 tokio-stream = "0.1"
 async-stream = "0.3"
-yellowstone-grpc-client = "1.13.0"
-yellowstone-grpc-proto = { version = "1.13.0", features = ["client"] }
+yellowstone-grpc-client = "1.14.2"
+yellowstone-grpc-proto = "1.14.2"
 maplit = "1.0"
 backoff = { version = "0.4", features = ["tokio"] }
