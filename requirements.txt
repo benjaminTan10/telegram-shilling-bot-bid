@@ -1,0 +1,5 @@
+asyncstdlib
+telethon
+pillow
+pyyaml
+jsonschema
